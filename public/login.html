@@ -68,8 +68,15 @@
 </div>
 <script>
 function switchTab(t) {
-  document.getElementById('sub-tab-content').style.display = t === 'sub' ? '' : 'none';
-  document.getElementById('owner-tab-content').style.display = t === 'owner' ? '' : 'none';
+  const subContent = document.getElementById('sub-tab-content');
+  const ownerContent = document.getElementById('owner-tab-content');
+  if (t === 'sub') {
+    subContent.style.display = 'block';
+    ownerContent.style.display = 'none';
+  } else {
+    subContent.style.display = 'none';
+    ownerContent.style.display = 'block';
+  }
   document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', i === (t==='sub'?0:1)));
 }
 
