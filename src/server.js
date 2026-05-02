@@ -304,7 +304,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => console.log(`\n🎯 Subscriber Server running at http://localhost:${PORT}\n`));
+httpServer.listen(PORT, () => console.log(`\n🎯 BthLab running at http://localhost:${PORT}\n`));
 
 setInterval(() => {
   Object.keys(rooms).forEach(key => {
