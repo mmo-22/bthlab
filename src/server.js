@@ -137,8 +137,8 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Redirect root to login
-app.get('/', (req, res) => res.redirect('/login.html'));
+// Redirect root to landing page
+app.get('/', (req, res) => res.redirect('/subscribe.html'));
 
 // Protected pages
 app.get('/wheel.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wheel.html')));
