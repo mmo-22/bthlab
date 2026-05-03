@@ -23,7 +23,7 @@ app.use(express.json({ limit: '2mb' }));
 const MOYASAR_PK = process.env.MOYASAR_PK || 'pk_test_K1YdX6c5X1vYvCByHN77jSxHkJikW9LvAnGmkcaM';
 const MOYASAR_SK = process.env.MOYASAR_SK || 'sk_test_57sx5mBRNQHoAu';
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'admin2024';
-const SUBSCRIPTION_PRICE = parseInt(process.env.SUBSCRIPTION_PRICE || '3000');
+const SUBSCRIPTION_PRICE = parseInt(process.env.SUBSCRIPTION_PRICE || '8000');
 const DATA_FILE = path.join(__dirname, '../data/subscribers.json');
 
 const dataDir = path.join(__dirname, '../data');
