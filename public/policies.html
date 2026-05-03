@@ -29,6 +29,17 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .policy .highlight-box strong{color:var(--accent2)}
 
 .footer{text-align:center;padding:30px 0;margin-top:40px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+
+/* Light mode */
+body.light{--bg:#f5f5f7;--surface:rgba(0,0,0,.03);--border:rgba(0,0,0,.08);--accent2:#0891b2;--text:#1a1a2e;--muted:#888}
+body.light .tab.active{background:#0891b2;color:#fff;border-color:#0891b2}
+body.light .highlight-box{background:rgba(255,255,255,.5);border-color:rgba(0,0,0,.08)}
+body.light .policy p{color:rgba(0,0,0,.65)}
+body.light .policy ul{color:rgba(0,0,0,.65)}
+body.light .nav-btn{background:#0891b2}
+
+.theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:40px;height:40px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.theme-toggle:hover{transform:scale(1.1)}
 </style>
 </head>
 <body>
@@ -48,7 +59,7 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 <!-- شروط الاستخدام -->
 <div class="policy active" id="terms">
   <h2>📄 شروط الاستخدام</h2>
-  <div class="date">آخر تحديث: يناير 2025</div>
+  <div class="date">آخر تحديث: يناير 2026</div>
 
   <h3>1. مقدمة</h3>
   <p>مرحباً بك في BthLab (مختبر البث). باستخدامك لخدماتنا فإنك توافق على الالتزام بهذه الشروط والأحكام. يرجى قراءتها بعناية قبل الاشتراك أو استخدام أي من خدماتنا.</p>
@@ -91,7 +102,7 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 <!-- سياسة الاسترجاع -->
 <div class="policy" id="refund">
   <h2>💰 سياسة الاسترجاع</h2>
-  <div class="date">آخر تحديث: يناير 2025</div>
+  <div class="date">آخر تحديث: يناير 2026</div>
 
   <h3>1. حق الاسترجاع</h3>
   <p>يحق للمشترك طلب استرجاع المبلغ المدفوع وفقاً للشروط التالية:</p>
@@ -123,7 +134,7 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 <!-- سياسة الخصوصية -->
 <div class="policy" id="privacy">
   <h2>🔒 سياسة الخصوصية وحماية البيانات</h2>
-  <div class="date">آخر تحديث: يناير 2025</div>
+  <div class="date">آخر تحديث: يناير 2026</div>
 
   <h3>1. البيانات التي نجمعها</h3>
   <p>نجمع الحد الأدنى من البيانات اللازمة لتقديم الخدمة:</p>
@@ -182,16 +193,33 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 
 <footer class="footer">
   🧪 BthLab — مختبر البث<br>
-  © 2025 BthLab. جميع الحقوق محفوظة.
+  © 2026 BthLab. جميع الحقوق محفوظة.
 </footer>
 
 </div>
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">☀️</button>
 <script>
 function showTab(id) {
   document.querySelectorAll('.policy').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   event.target.classList.add('active');
+}
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('theme-toggle').textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+if (localStorage.getItem('theme') === 'light') {
+  document.body.classList.add('light');
+  document.getElementById('theme-toggle').textContent = '🌙';
+}
+// Handle hash links
+if (location.hash) {
+  const id = location.hash.replace('#','');
+  const el = document.getElementById(id);
+  if (el) { document.querySelectorAll('.policy').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active')); el.classList.add('active'); }
 }
 </script>
 </body>

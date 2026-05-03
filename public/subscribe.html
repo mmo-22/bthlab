@@ -131,6 +131,30 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .footer-links a{color:var(--muted);font-size:11px;text-decoration:none;transition:color .15s}
 .footer-links a:hover{color:var(--accent2)}
 
+/* Light mode */
+body.light{--bg:#f5f5f7;--surface:rgba(0,0,0,.03);--surface2:rgba(0,0,0,.05);--border:rgba(0,0,0,.08);--text:#1a1a2e;--muted:#888;--accent:#ff0050;--accent2:#0891b2;--green:#16a34a;--gold:#d97706}
+body.light .bg-glow::before{background:radial-gradient(circle,rgba(8,145,178,.06) 0%,transparent 70%)}
+body.light .bg-glow::after{background:radial-gradient(circle,rgba(255,0,80,.04) 0%,transparent 70%)}
+body.light .navbar{background:rgba(245,245,247,.9);border-bottom-color:rgba(0,0,0,.06)}
+body.light .hero-cta{background:linear-gradient(135deg,#0891b2,#06b6d4);box-shadow:0 4px 24px rgba(8,145,178,.15)}
+body.light .hero-cta:hover{box-shadow:0 8px 36px rgba(8,145,178,.25)}
+body.light .feature-card{background:rgba(255,255,255,.6);border-color:rgba(0,0,0,.06)}
+body.light .feature-card:hover{border-color:rgba(8,145,178,.2);box-shadow:0 8px 30px rgba(0,0,0,.08)}
+body.light .feature-card::before{background:radial-gradient(circle,rgba(8,145,178,.04) 0%,transparent 70%)}
+body.light .step-num{background:linear-gradient(135deg,#0891b2,#06b6d4);box-shadow:0 0 16px rgba(8,145,178,.15)}
+body.light .pricing-card{background:rgba(255,255,255,.7);border-color:rgba(8,145,178,.15)}
+body.light .pricing-cta{background:linear-gradient(135deg,#0891b2,#06b6d4);box-shadow:0 4px 20px rgba(8,145,178,.12)}
+body.light .faq-item{background:rgba(255,255,255,.5);border-color:rgba(0,0,0,.06)}
+body.light .marquee-wrap{border-color:rgba(0,0,0,.05)}
+body.light .hero-secondary{background:rgba(255,255,255,.5);border-color:rgba(0,0,0,.08);color:var(--text)}
+body.light .pricing-features li{color:rgba(0,0,0,.65)}
+body.light .pricing-features li .check{background:rgba(22,163,74,.1);color:#16a34a}
+body.light .tag-live{background:rgba(22,163,74,.08);color:#16a34a}
+body.light .footer{border-top-color:rgba(0,0,0,.06)}
+
+.theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:44px;height:44px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+.theme-toggle:hover{transform:scale(1.1)}
+
 @media(max-width:480px){
   .hero{padding:50px 16px 40px}
   .features-grid{grid-template-columns:1fr}
@@ -351,7 +375,7 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 <!-- Footer -->
 <footer class="footer">
   <div class="footer-logo">🧪 <span>BthLab</span></div>
-  <div class="footer-text">مختبر البث — أدوات تفاعلية للبث المباشر<br>© 2025 BthLab. جميع الحقوق محفوظة.</div>
+  <div class="footer-text">مختبر البث — أدوات تفاعلية للبث المباشر<br>© 2026 BthLab. جميع الحقوق محفوظة.</div>
   <div class="footer-links">
     <a href="/login.html">تسجيل الدخول</a>
     <a href="#pricing">الأسعار</a>
@@ -362,6 +386,24 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
   </div>
 </footer>
 
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">☀️</button>
+
 </div>
 </body>
 </html>
+<script>
+function toggleTheme() {
+  const body = document.body;
+  const btn = document.getElementById('theme-toggle');
+  body.classList.toggle('light');
+  const isLight = body.classList.contains('light');
+  btn.textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+// Load saved theme
+const saved = localStorage.getItem('theme');
+if (saved === 'light') {
+  document.body.classList.add('light');
+  document.getElementById('theme-toggle').textContent = '🌙';
+}
+</script>
