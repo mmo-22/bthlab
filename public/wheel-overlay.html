@@ -101,8 +101,27 @@
 
 <script>
 const params   = new URLSearchParams(location.search);
-const username = params.get('username') || '';
+let username = params.get('username') || '';
+const authKey  = params.get('key') || '';
 const socket   = io();
+
+// If key provided but no username, resolve from server
+if (!username && authKey) {
+  fetch('/api/resolve-key?key=' + encodeURIComponent(authKey))
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok && data.username) {
+        username = data.username;
+        socket.emit('join', { username });
+        loadWheelState();
+      } else if (data.ok && data.connectedRooms && data.connectedRooms.length > 0) {
+        username = data.connectedRooms[0];
+        socket.emit('join', { username });
+        loadWheelState();
+      }
+    })
+    .catch(() => {});
+}
 const canvas   = document.getElementById('wheel-canvas');
 const ctx      = canvas.getContext('2d');
 
@@ -118,16 +137,28 @@ let regTimer     = null;
 let regEndTime   = 0;
 let accepting    = false;
 
-if (username) socket.emit('join', { username });
+// Load existing entries
+function loadWheelState() {
+  if (!username) return;
+  fetch(`/api/wheel/${username}`).then(r => r.json()).then(data => {
+    if (data.accepting) {
+      accepting = true;
+      regEndTime = data.regEndTime || 0;
+      showRegBanner(data.keyword || 'اشتراك', data.count || 0);
+    }
+    entries = data.entries || [];
+    if (entries.length > 0) {
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('wheel-wrap').style.display = 'flex';
+      drawWheel(currentAngle);
+    }
+  });
+}
 
-// Load initial state
-fetch(`/api/wheel/${username}`).then(r => r.json()).then(data => {
-  if (data.accepting) {
-    accepting = true;
-    regEndTime = data.regEndTime || 0;
-    showRegBanner(data.keyword || 'اشتراك', data.count || 0);
-  }
-});
+if (username) {
+  socket.emit('join', { username });
+  loadWheelState();
+}
 
 // Receive entries updates (لحظي)
 socket.on('wheel:update', ({ entries: e }) => {
@@ -242,19 +273,7 @@ function doSpin(winner, winnerIndex, duration, speed) {
   requestAnimationFrame(animate);
 }
 
-// Load existing entries
-if (username) {
-  fetch(`/api/wheel/${username}`).then(r => r.json()).then(data => {
-    entries = data.entries || [];
-    if (entries.length > 0) {
-      document.getElementById('waiting').style.display = 'none';
-      document.getElementById('wheel-wrap').style.display = 'flex';
-      drawWheel(currentAngle);
-    }
-  });
-}
-
-// ── Draw ──────────────────────────────────────────────────
+drawWheel(currentAngle);
 function drawWheel(angle) {
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;

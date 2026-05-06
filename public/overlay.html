@@ -145,7 +145,8 @@
 
 <script>
 const params = new URLSearchParams(location.search);
-const username = params.get('user') || '';
+let username = params.get('user') || '';
+const authKey = params.get('key') || '';
 const maxMessages = parseInt(params.get('max') || '8');
 const side = (params.get('side') || 'right').toLowerCase();
 const showStats = params.get('stats') !== '0';
@@ -155,7 +156,23 @@ document.getElementById('feed').classList.add('side-' + side);
 document.getElementById('stats-bar').classList.add('side-' + side);
 if (!showStats) document.getElementById('stats-bar').style.display = 'none';
 
-if (username) socket.emit('join', { username });
+// If key provided but no username, resolve from server
+if (!username && authKey) {
+  fetch('/api/resolve-key?key=' + encodeURIComponent(authKey))
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok && data.username) {
+        username = data.username;
+        socket.emit('join', { username });
+      } else if (data.ok && data.connectedRooms && data.connectedRooms.length > 0) {
+        username = data.connectedRooms[0];
+        socket.emit('join', { username });
+      }
+    })
+    .catch(() => {});
+} else if (username) {
+  socket.emit('join', { username });
+}
 
 socket.on('stats', (stats) => {
   const setStat = (id, newVal) => {

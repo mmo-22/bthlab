@@ -125,6 +125,52 @@ app.post('/api/subscribers/add', (req, res) => {
   res.json({ ok: true, key, expiresAt: expires.toISOString() });
 });
 
+// ── Resolve key → username (for overlay auto-connect) ───
+app.get('/api/resolve-key', (req, res) => {
+  const key = req.query.key || '';
+  const sub = subscribers[key];
+  if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+    return res.json({ ok: false, error: 'مفتاح غير صالح أو منتهي' });
+  }
+  // Find connected room for this subscriber
+  const connectedRooms = Object.keys(rooms).filter(u => rooms[u].status === 'connected' || rooms[u].status === 'connecting' || rooms[u].status === 'retrying');
+  // Also store tiktokUsername on subscriber if set
+  const tiktokUsername = sub.tiktokUsername || '';
+  res.json({ ok: true, username: tiktokUsername, connectedRooms, name: sub.name });
+});
+
+// ── Save TikTok username to subscriber ──────────────────
+app.post('/api/save-username', (req, res) => {
+  const { key, username } = req.body;
+  if (!key || !username) return res.json({ ok: false });
+  const sub = subscribers[key];
+  if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+    return res.json({ ok: false, error: 'مفتاح غير صالح' });
+  }
+  sub.tiktokUsername = username.toLowerCase().replace('@', '').trim();
+  saveSubscribers(subscribers);
+  res.json({ ok: true, username: sub.tiktokUsername });
+});
+
+// ── My Links (generate all overlay links for subscriber) ─
+app.get('/api/my-links', (req, res) => {
+  const key = req.query.key || '';
+  const sub = subscribers[key];
+  if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+    return res.json({ ok: false, error: 'مفتاح غير صالح' });
+  }
+  const tiktokUsername = sub.tiktokUsername || '';
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const links = {
+    wheelOverlay: `${baseUrl}/wheel-overlay.html?key=${encodeURIComponent(key)}`,
+    chatOverlay: `${baseUrl}/overlay.html?key=${encodeURIComponent(key)}`,
+    wheel: `${baseUrl}/wheel.html?key=${encodeURIComponent(key)}`,
+    admin: `${baseUrl}/admin.html?mode=subscriber&key=${encodeURIComponent(key)}`,
+    sounds: `${baseUrl}/sounds.html?key=${encodeURIComponent(key)}`,
+  };
+  res.json({ ok: true, tiktokUsername, links, name: sub.name, expiresAt: sub.expiresAt });
+});
+
 // ── Auth middleware (protect pages) ──────────────────────
 function requireAuth(req, res, next) {
   const key = req.query.key || '';
