@@ -189,6 +189,10 @@ app.get('/', (req, res) => res.redirect('/subscribe.html'));
 // Protected pages
 app.get('/wheel.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wheel.html')));
 app.get('/admin.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
+app.get('/password.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/password.html')));
+app.get('/wordwar.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wordwar.html')));
+app.get('/quiz.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/quiz.html')));
+app.get('/poll.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/poll.html')));
 app.get('/subscriptions.html', (req, res) => {
   if (req.query.pw !== OWNER_PASSWORD) return res.redirect('/login.html');
   res.sendFile(path.join(__dirname, '../public/subscriptions.html'));
@@ -256,6 +260,69 @@ async function connectRoom(username, sessionid = null) {
       wheel.entries.set(data.userId, entry);
       broadcast(key, 'wheel:update', { entries: Array.from(wheel.entries.values()), count: wheel.entries.size, newEntry: entry });
     }
+
+    // Password game check
+    const pw = getPassword(key);
+    if (pw.active && pw.word && data.comment) {
+      const guess = data.comment.trim();
+      if (guess === pw.word && !pw.winner) {
+        pw.winner = { userId: data.userId, name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null };
+        pw.active = false;
+        pw.revealed = new Array(pw.word.length).fill(true);
+        broadcast(key, 'password:winner', { winner: pw.winner, word: pw.word });
+        broadcast(key, 'password:update', { length: pw.word.length, revealed: pw.revealed, letters: pw.word.split(''), active: false, winner: pw.winner, hints: pw.hints });
+      }
+    }
+
+    // Word War check
+    const ww = getWordWar(key);
+    if (ww.active && data.comment) {
+      const comment = data.comment.trim();
+      // Join team: "أحمر" or "أزرق"
+      if (comment === 'أحمر' && !ww.teams.blue.members.has(data.userId)) {
+        ww.teams.red.members.add(data.userId);
+        broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+      } else if (comment === 'أزرق' && !ww.teams.red.members.has(data.userId)) {
+        ww.teams.blue.members.add(data.userId);
+        broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+      }
+      // Check if correct word typed
+      if (ww.targetWord && comment === ww.targetWord && !ww.roundWinner) {
+        ww.roundWinner = data.userId;
+        const team = ww.teams.red.members.has(data.userId) ? 'red' : ww.teams.blue.members.has(data.userId) ? 'blue' : null;
+        if (team) {
+          ww.teams[team].score++;
+          broadcast(key, 'wordwar:correct', { team, user: data.nickname || data.uniqueId, word: ww.targetWord });
+          broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+        }
+      }
+    }
+
+    // Quiz check — answer by number (1, 2, 3, 4)
+    const quiz = getQuiz(key);
+    if (quiz.active && data.comment) {
+      const num = parseInt(data.comment.trim());
+      if (num >= 1 && num <= quiz.choices.length && !quiz.answers.has(data.userId)) {
+        quiz.answers.set(data.userId, num - 1);
+        if (num - 1 === quiz.correctIndex && !quiz.winner) {
+          quiz.winner = { userId: data.userId, name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null };
+        }
+        broadcast(key, 'quiz:answer', { totalAnswers: quiz.answers.size });
+      }
+    }
+
+    // Poll check — vote by number (1, 2, 3, ...)
+    const poll = getPoll(key);
+    if (poll.active && data.comment) {
+      const num = parseInt(data.comment.trim());
+      if (num >= 1 && num <= poll.options.length && !poll.votes.has(data.userId)) {
+        poll.votes.set(data.userId, num - 1);
+        const results = {};
+        poll.options.forEach((_, i) => results[i] = 0);
+        poll.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+        broadcast(key, 'poll:vote', { results, totalVotes: poll.votes.size });
+      }
+    }
   });
 
   tiktok.on('like', (data) => { if (data.totalLikeCount) room.stats.likes = data.totalLikeCount; broadcast(key, 'like', { user: data.nickname || data.uniqueId, totalLikeCount: data.totalLikeCount }); broadcast(key, 'stats', room.stats); });
@@ -308,6 +375,238 @@ app.post('/api/wheel/remove-winner', (req, res) => { const key = req.body.userna
 app.post('/api/wheel/remove', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
 app.post('/api/wheel/spin', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (w.entries.size < 2) return res.json({ ok: false, message: 'يحتاج مشتركين أكثر' }); const entries = Array.from(w.entries.values()); const winnerIndex = Math.floor(Math.random() * entries.length); const winner = entries[winnerIndex]; const durationMs = (req.body.duration || 5) * 1000; io.to(`room:${key}`).emit('wheel:spin', { winner, winnerIndex, duration: durationMs, speed: req.body.speed || 'normal', entries }); res.json({ ok: true, winner }); });
 app.get('/api/wheel/:username', (req, res) => { const key = req.params.username.toLowerCase().replace('@','').trim(); const w = getWheel(key); res.json({ keyword: w.keyword, entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, regEndTime: w.regEndTime || 0 }); });
+
+// ══════════════════════════════════════════════════════════
+// ── Password Game (كلمة السر) ────────────────────────────
+// ══════════════════════════════════════════════════════════
+const passwords = {};
+function getPassword(key) {
+  if (!passwords[key]) passwords[key] = { word: '', revealed: [], active: false, winner: null, hints: [] };
+  return passwords[key];
+}
+
+app.post('/api/password/start', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const pw = getPassword(key);
+  pw.word = (req.body.word || '').trim();
+  pw.revealed = new Array(pw.word.length).fill(false);
+  pw.active = true;
+  pw.winner = null;
+  pw.hints = [];
+  // Reveal first and last letter
+  if (pw.word.length >= 2) { pw.revealed[0] = true; pw.revealed[pw.word.length - 1] = true; }
+  broadcast(key, 'password:update', { length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: true, winner: null, hints: pw.hints });
+  res.json({ ok: true });
+});
+
+app.post('/api/password/reveal', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const pw = getPassword(key);
+  if (!pw.active) return res.json({ ok: false });
+  // Reveal a random hidden letter
+  const hidden = pw.revealed.map((r, i) => r ? -1 : i).filter(i => i >= 0);
+  if (hidden.length === 0) return res.json({ ok: false, message: 'كل الحروف مكشوفة' });
+  const idx = hidden[Math.floor(Math.random() * hidden.length)];
+  pw.revealed[idx] = true;
+  broadcast(key, 'password:update', { length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: true, winner: null, hints: pw.hints });
+  res.json({ ok: true });
+});
+
+app.post('/api/password/hint', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key || !req.body.hint) return res.json({ ok: false });
+  const pw = getPassword(key);
+  pw.hints.push(req.body.hint);
+  broadcast(key, 'password:update', { length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: pw.active, winner: pw.winner, hints: pw.hints });
+  res.json({ ok: true });
+});
+
+app.post('/api/password/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const pw = getPassword(key);
+  pw.active = false;
+  pw.revealed = new Array(pw.word.length).fill(true);
+  broadcast(key, 'password:update', { length: pw.word.length, revealed: pw.revealed, letters: pw.word.split(''), active: false, winner: pw.winner, hints: pw.hints });
+  res.json({ ok: true });
+});
+
+app.get('/api/password/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const pw = getPassword(key);
+  res.json({ length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: pw.active, winner: pw.winner, hints: pw.hints });
+});
+
+// ══════════════════════════════════════════════════════════
+// ── Word War (حرب الكلمات) ───────────────────────────────
+// ══════════════════════════════════════════════════════════
+const wordWars = {};
+function getWordWar(key) {
+  if (!wordWars[key]) wordWars[key] = { active: false, teams: { red: { name: 'أحمر', score: 0, members: new Set() }, blue: { name: 'أزرق', score: 0, members: new Set() } }, keyword: '', targetWord: '', round: 0 };
+  return wordWars[key];
+}
+
+app.post('/api/wordwar/start', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ww = getWordWar(key);
+  ww.active = true;
+  ww.teams.red.score = 0; ww.teams.blue.score = 0;
+  ww.teams.red.members.clear(); ww.teams.blue.members.clear();
+  ww.round = 0;
+  ww.keyword = req.body.keyword || 'حرب';
+  broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: 0, members: 0 }, blue: { name: ww.teams.blue.name, score: 0, members: 0 }, round: 0, targetWord: '' });
+  res.json({ ok: true });
+});
+
+app.post('/api/wordwar/round', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ww = getWordWar(key);
+  ww.round++;
+  ww.targetWord = (req.body.word || '').trim();
+  ww.roundWinner = null;
+  broadcast(key, 'wordwar:round', { round: ww.round, targetWord: ww.targetWord });
+  res.json({ ok: true });
+});
+
+app.post('/api/wordwar/score', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ww = getWordWar(key);
+  const team = req.body.team; // 'red' or 'blue'
+  const points = parseInt(req.body.points) || 1;
+  if (ww.teams[team]) ww.teams[team].score += points;
+  broadcast(key, 'wordwar:update', { active: ww.active, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+  res.json({ ok: true });
+});
+
+app.post('/api/wordwar/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ww = getWordWar(key);
+  ww.active = false;
+  const winner = ww.teams.red.score > ww.teams.blue.score ? 'red' : ww.teams.blue.score > ww.teams.red.score ? 'blue' : 'tie';
+  broadcast(key, 'wordwar:end', { winner, red: ww.teams.red.score, blue: ww.teams.blue.score });
+  res.json({ ok: true, winner });
+});
+
+app.get('/api/wordwar/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const ww = getWordWar(key);
+  res.json({ active: ww.active, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '', keyword: ww.keyword });
+});
+
+// ══════════════════════════════════════════════════════════
+// ── Quiz (سؤال وجواب) ───────────────────────────────────
+// ══════════════════════════════════════════════════════════
+const quizzes = {};
+function getQuiz(key) {
+  if (!quizzes[key]) quizzes[key] = { active: false, question: '', choices: [], correctIndex: -1, answers: new Map(), winner: null, timer: 0 };
+  return quizzes[key];
+}
+
+app.post('/api/quiz/start', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const q = getQuiz(key);
+  q.active = true;
+  q.question = req.body.question || '';
+  q.choices = req.body.choices || [];
+  q.correctIndex = parseInt(req.body.correctIndex) ?? -1;
+  q.answers.clear();
+  q.winner = null;
+  q.timer = parseInt(req.body.timer) || 30;
+  const endTime = Date.now() + q.timer * 1000;
+  q.endTime = endTime;
+  broadcast(key, 'quiz:start', { question: q.question, choices: q.choices, timer: q.timer, endTime, choiceCount: q.choices.length });
+  // Auto-stop
+  if (q.quizTimer) clearTimeout(q.quizTimer);
+  q.quizTimer = setTimeout(() => {
+    q.active = false;
+    const results = {};
+    q.choices.forEach((_, i) => results[i] = 0);
+    q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
+    broadcast(key, 'quiz:end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
+  }, q.timer * 1000);
+  res.json({ ok: true });
+});
+
+app.post('/api/quiz/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const q = getQuiz(key);
+  q.active = false;
+  if (q.quizTimer) { clearTimeout(q.quizTimer); q.quizTimer = null; }
+  const results = {};
+  q.choices.forEach((_, i) => results[i] = 0);
+  q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
+  broadcast(key, 'quiz:end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
+  res.json({ ok: true });
+});
+
+app.get('/api/quiz/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const q = getQuiz(key);
+  res.json({ active: q.active, question: q.question, choices: q.choices, timer: q.timer, endTime: q.endTime || 0, totalAnswers: q.answers.size });
+});
+
+// ══════════════════════════════════════════════════════════
+// ── Poll (التصويت) ───────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+const polls = {};
+function getPoll(key) {
+  if (!polls[key]) polls[key] = { active: false, question: '', options: [], votes: new Map(), timer: 0 };
+  return polls[key];
+}
+
+app.post('/api/poll/start', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const p = getPoll(key);
+  p.active = true;
+  p.question = req.body.question || '';
+  p.options = req.body.options || [];
+  p.votes.clear();
+  p.timer = parseInt(req.body.timer) || 60;
+  const endTime = Date.now() + p.timer * 1000;
+  p.endTime = endTime;
+  broadcast(key, 'poll:start', { question: p.question, options: p.options, timer: p.timer, endTime });
+  // Auto-stop
+  if (p.pollTimer) clearTimeout(p.pollTimer);
+  p.pollTimer = setTimeout(() => {
+    p.active = false;
+    const results = {};
+    p.options.forEach((_, i) => results[i] = 0);
+    p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+    broadcast(key, 'poll:end', { results, totalVotes: p.votes.size });
+  }, p.timer * 1000);
+  res.json({ ok: true });
+});
+
+app.post('/api/poll/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const p = getPoll(key);
+  p.active = false;
+  if (p.pollTimer) { clearTimeout(p.pollTimer); p.pollTimer = null; }
+  const results = {};
+  p.options.forEach((_, i) => results[i] = 0);
+  p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+  broadcast(key, 'poll:end', { results, totalVotes: p.votes.size });
+  res.json({ ok: true });
+});
+
+app.get('/api/poll/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const p = getPoll(key);
+  const results = {};
+  p.options.forEach((_, i) => results[i] = 0);
+  p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+  res.json({ active: p.active, question: p.question, options: p.options, results, totalVotes: p.votes.size, timer: p.timer, endTime: p.endTime || 0 });
+});
 
 // ── REST API ─────────────────────────────────────────────
 app.post('/api/connect', async (req, res) => {
