@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Poll Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:transparent; width:100vw; height:100vh; font-family:'Tajawal',sans-serif; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; padding-bottom:30px; }
+#container { display:none; max-width:460px; width:90vw; }
+.poll-card { background:rgba(0,0,0,.88); border:2px solid rgba(37,244,238,.25); border-radius:20px; padding:18px 22px; backdrop-filter:blur(8px); }
+.poll-question { font-size:17px; font-weight:900; color:#fff; text-align:center; margin-bottom:14px; line-height:1.6; }
+.poll-options { display:flex; flex-direction:column; gap:8px; }
+.poll-option { display:flex; align-items:center; gap:10px; position:relative; }
+.opt-num { width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; color:#fff; flex-shrink:0; }
+.opt-bar-wrap { flex:1; height:32px; background:rgba(255,255,255,.06); border-radius:8px; overflow:hidden; position:relative; }
+.opt-bar-fill { height:100%; border-radius:8px; transition:width .6s ease; display:flex; align-items:center; padding:0 10px; min-width:0; }
+.opt-label { font-size:13px; font-weight:700; color:#fff; white-space:nowrap; }
+.opt-pct { font-size:12px; font-weight:700; color:rgba(255,255,255,.7); min-width:36px; text-align:left; flex-shrink:0; }
+.timer-bar { height:3px; background:rgba(255,255,255,.1); border-radius:2px; margin-top:10px; overflow:hidden; }
+.timer-fill { height:100%; background:#25f4ee; transition:width .2s linear; }
+.vote-count { text-align:center; font-size:11px; color:rgba(255,255,255,.4); margin-top:6px; }
+#end-banner { display:none; text-align:center; margin-top:8px; padding:8px; background:rgba(255,215,0,.12); border-radius:8px; color:#ffd700; font-size:14px; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div class="poll-card">
+    <div class="poll-question" id="question">🎯 التصويت</div>
+    <div class="poll-options" id="options"></div>
+    <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+    <div class="vote-count" id="vote-count">0 صوت</div>
+    <div id="end-banner">📊 انتهى التصويت!</div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+let username = params.get('username') || '';
+const authKey = params.get('key') || '';
+const socket = io();
+let timerInterval = null;
+let endTime = 0;
+let totalTime = 60;
+let optionsData = [];
+const colors = ['#ff0050','#25f4ee','#ffd700','#1dba72','#a57afa','#f59e0b'];
+
+if (!username && authKey) {
+  fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{
+    if(d.ok&&d.username){username=d.username;socket.emit('join',{username});loadState();}
+    else if(d.ok&&d.connectedRooms?.length){username=d.connectedRooms[0];socket.emit('join',{username});loadState();}
+  });
+} else if(username){socket.emit('join',{username});loadState();}
+
+function loadState() {
+  fetch(`/api/poll/${username}`).then(r=>r.json()).then(d=>{
+    if(d.active){
+      document.getElementById('container').style.display='block';
+      document.getElementById('question').textContent=d.question;
+      optionsData=d.options;
+      renderBars(d.results, d.totalVotes);
+      endTime=d.endTime; totalTime=d.timer;
+      if(timerInterval)clearInterval(timerInterval);
+      timerInterval=setInterval(updateTimer,100);
+    }
+  });
+}
+
+socket.on('poll:start', (data) => {
+  document.getElementById('container').style.display = 'block';
+  document.getElementById('question').textContent = data.question;
+  document.getElementById('end-banner').style.display = 'none';
+  optionsData = data.options;
+  endTime = data.endTime;
+  totalTime = data.timer;
+  const empty = {}; data.options.forEach((_,i) => empty[i]=0);
+  renderBars(empty, 0);
+  document.getElementById('vote-count').textContent = '0 صوت';
+  if(timerInterval)clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 100);
+});
+
+socket.on('poll:vote', (data) => {
+  document.getElementById('vote-count').textContent = data.totalVotes + ' صوت';
+  renderBars(data.results, data.totalVotes);
+});
+
+socket.on('poll:end', (data) => {
+  if(timerInterval)clearInterval(timerInterval);
+  document.getElementById('timer-fill').style.width='0%';
+  document.getElementById('vote-count').textContent = data.totalVotes + ' صوت';
+  renderBars(data.results, data.totalVotes);
+  document.getElementById('end-banner').style.display = 'block';
+  setTimeout(() => { document.getElementById('container').style.display='none'; }, 10000);
+});
+
+function renderBars(results, total) {
+  const t = total || 1;
+  document.getElementById('options').innerHTML = optionsData.map((o, i) => {
+    const count = results[i] || 0;
+    const pct = Math.round((count / t) * 100);
+    return `<div class="poll-option">
+      <span class="opt-num">${i+1}</span>
+      <div class="opt-bar-wrap">
+        <div class="opt-bar-fill" style="width:${Math.max(pct,2)}%;background:${colors[i%colors.length]}">
+          <span class="opt-label">${esc(o)}</span>
+        </div>
+      </div>
+      <span class="opt-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function updateTimer() {
+  const remain = Math.max(0, endTime - Date.now());
+  document.getElementById('timer-fill').style.width = ((remain / (totalTime * 1000)) * 100) + '%';
+  if(remain<=0 && timerInterval) clearInterval(timerInterval);
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

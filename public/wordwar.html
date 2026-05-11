@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚔️ حرب الكلمات — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#25f4ee; --text:#f0f0f5; --muted:#666; --green:#1dba72; --amber:#f59e0b; --red:#ef4444; --blue:#3b82f6; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; }
+header { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+.logo { font-size:18px; font-weight:700; } .logo span { color:var(--accent); }
+.container { max-width:700px; margin:0 auto; padding:20px 16px; display:flex; flex-direction:column; gap:14px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+.card-title { font-size:12px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+.how-box { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:14px; font-size:13px; color:rgba(255,255,255,.6); line-height:2; border-right:3px solid var(--accent2); }
+.how-box strong { color:var(--accent2); }
+.btn { border:none; font-family:inherit; font-size:14px; font-weight:700; padding:12px; border-radius:10px; cursor:pointer; transition:all .15s; width:100%; }
+.btn:hover { opacity:.85; }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+.btn-start { background:var(--green); color:#fff; }
+.btn-stop { background:var(--accent); color:#fff; }
+.btns-row { display:flex; gap:8px; }
+.btns-row .btn { flex:1; }
+input[type=text] { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:16px; padding:10px 14px; border-radius:8px; outline:none; text-align:center; }
+input[type=text]:focus { border-color:var(--accent2); }
+label { font-size:13px; color:#aaa; display:block; margin-bottom:6px; }
+
+.scoreboard { display:flex; gap:12px; margin:14px 0; }
+.team-card { flex:1; border-radius:14px; padding:16px; text-align:center; }
+.team-red { background:rgba(239,68,68,.1); border:2px solid rgba(239,68,68,.3); }
+.team-blue { background:rgba(59,130,246,.1); border:2px solid rgba(59,130,246,.3); }
+.team-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+.team-red .team-name { color:var(--red); }
+.team-blue .team-name { color:var(--blue); }
+.team-score { font-size:36px; font-weight:900; }
+.team-red .team-score { color:var(--red); }
+.team-blue .team-score { color:var(--blue); }
+.team-members { font-size:11px; color:var(--muted); margin-top:4px; }
+
+.round-display { text-align:center; font-size:16px; font-weight:700; color:var(--amber); padding:8px; background:rgba(245,158,11,.08); border-radius:8px; }
+.word-display { text-align:center; font-size:28px; font-weight:900; color:var(--accent2); letter-spacing:3px; padding:12px; margin:8px 0; }
+.correct-flash { text-align:center; padding:10px; border-radius:8px; font-weight:700; display:none; }
+.correct-flash.show { display:block; animation:flashIn .3s ease; }
+@keyframes flashIn { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:scale(1)} }
+.overlay-link { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; font-family:monospace; font-size:12px; color:var(--accent2); word-break:break-all; cursor:pointer; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">⚔️ حرب الكلمات <span>Control</span></div>
+  <div style="font-size:13px;color:var(--muted)" id="status-text">غير متصل</div>
+</header>
+<div class="container">
+
+  <div class="how-box">
+    <strong>📖 كيف تشتغل الفعالية:</strong><br>
+    1. ابدأ الحرب — المشاهدين ينضمون بكتابة <strong>"أحمر"</strong> أو <strong>"أزرق"</strong> في الشات<br>
+    2. حط كلمة الجولة — أول شخص يكتبها صح يكسب نقطة لفريقه<br>
+    3. كل جولة كلمة جديدة — الفريق اللي يوصل نقاط أكثر يفوز! ⚔️<br>
+    <strong>تلميح:</strong> استخدمها مع أسئلة ثقافية أو ألغاز — اكتب السؤال بصوتك والجواب هو الكلمة
+  </div>
+
+  <div class="card">
+    <div class="card-title">بدء / إيقاف الحرب</div>
+    <div class="btns-row">
+      <button class="btn btn-start" id="start-btn" onclick="startWar()">⚔️ ابدأ الحرب</button>
+      <button class="btn btn-stop" id="stop-btn" onclick="stopWar()" disabled>⏹ أنهِ الحرب</button>
+    </div>
+  </div>
+
+  <div class="scoreboard">
+    <div class="team-card team-red">
+      <div class="team-name">🔴 فريق أحمر</div>
+      <div class="team-score" id="red-score">0</div>
+      <div class="team-members" id="red-members">0 لاعب</div>
+    </div>
+    <div class="team-card team-blue">
+      <div class="team-name">🔵 فريق أزرق</div>
+      <div class="team-score" id="blue-score">0</div>
+      <div class="team-members" id="blue-members">0 لاعب</div>
+    </div>
+  </div>
+
+  <div class="card" id="round-card" style="display:none">
+    <div class="card-title">الجولة الحالية</div>
+    <div class="round-display" id="round-num">الجولة 0</div>
+    <div class="word-display" id="word-display">—</div>
+    <div style="margin-bottom:12px">
+      <label>كلمة الجولة (الجواب الصحيح)</label>
+      <input type="text" id="word-input" placeholder="اكتب الكلمة...">
+    </div>
+    <button class="btn btn-start" onclick="newRound()">🔄 جولة جديدة</button>
+    <div class="correct-flash" id="correct-flash"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 رابط الأوفرلي</div>
+    <div class="overlay-link" id="overlay-link" onclick="copyLink()">اتصل بالبث أولاً</div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const username = params.get('username') || '';
+const socket = io();
+if (username) {
+  socket.emit('join', { username });
+  document.getElementById('status-text').textContent = '@' + username;
+  document.getElementById('overlay-link').textContent = location.origin + '/wordwar-overlay.html?username=' + username;
+}
+
+socket.on('wordwar:update', (data) => {
+  document.getElementById('red-score').textContent = data.red.score;
+  document.getElementById('blue-score').textContent = data.blue.score;
+  document.getElementById('red-members').textContent = data.red.members + ' لاعب';
+  document.getElementById('blue-members').textContent = data.blue.members + ' لاعب';
+  if (data.round > 0) document.getElementById('round-num').textContent = 'الجولة ' + data.round;
+});
+
+socket.on('wordwar:round', (data) => {
+  document.getElementById('round-num').textContent = 'الجولة ' + data.round;
+  document.getElementById('word-display').textContent = data.targetWord;
+});
+
+socket.on('wordwar:correct', (data) => {
+  const flash = document.getElementById('correct-flash');
+  flash.className = 'correct-flash show';
+  flash.style.background = data.team === 'red' ? 'rgba(239,68,68,.15)' : 'rgba(59,130,246,.15)';
+  flash.style.color = data.team === 'red' ? '#ef4444' : '#3b82f6';
+  flash.textContent = '✅ ' + data.user + ' كسب نقطة لفريق ' + (data.team === 'red' ? 'أحمر' : 'أزرق') + '!';
+  setTimeout(() => flash.classList.remove('show'), 4000);
+});
+
+socket.on('wordwar:end', (data) => {
+  const winner = data.winner === 'red' ? '🔴 أحمر' : data.winner === 'blue' ? '🔵 أزرق' : '🤝 تعادل';
+  alert('انتهت الحرب! الفائز: ' + winner + '\nأحمر: ' + data.red + ' | أزرق: ' + data.blue);
+});
+
+async function startWar() {
+  await fetch('/api/wordwar/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+  document.getElementById('start-btn').disabled = true;
+  document.getElementById('stop-btn').disabled = false;
+  document.getElementById('round-card').style.display = 'block';
+}
+
+async function stopWar() {
+  await fetch('/api/wordwar/stop', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('stop-btn').disabled = true;
+}
+
+async function newRound() {
+  const word = document.getElementById('word-input').value.trim();
+  if (!word) return;
+  document.getElementById('word-input').value = '';
+  await fetch('/api/wordwar/round', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, word }) });
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(document.getElementById('overlay-link').textContent);
+  document.getElementById('overlay-link').style.color = '#1dba72';
+  setTimeout(() => document.getElementById('overlay-link').style.color = '', 1500);
+}
+
+document.getElementById('word-input').addEventListener('keydown', e => { if(e.key==='Enter') newRound(); });
+
+if (username) fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(data => {
+  if (data.active) {
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = false;
+    document.getElementById('round-card').style.display = 'block';
+  }
+  document.getElementById('red-score').textContent = data.red.score;
+  document.getElementById('blue-score').textContent = data.blue.score;
+  document.getElementById('red-members').textContent = data.red.members + ' لاعب';
+  document.getElementById('blue-members').textContent = data.blue.members + ' لاعب';
+});
+</script>
+</body>
+</html>

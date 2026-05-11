@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Word War Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:transparent; width:100vw; height:100vh; font-family:'Tajawal',sans-serif; overflow:hidden; }
+#container { display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); }
+.scoreboard { display:flex; gap:0; border-radius:20px; overflow:hidden; border:2px solid rgba(255,255,255,.15); min-width:400px; }
+.team { flex:1; padding:14px 24px; text-align:center; }
+.team-red { background:rgba(239,68,68,.85); }
+.team-blue { background:rgba(59,130,246,.85); }
+.team-name { font-size:13px; font-weight:700; color:rgba(255,255,255,.8); }
+.team-score { font-size:36px; font-weight:900; color:#fff; }
+.vs { background:rgba(0,0,0,.9); color:#ffd700; font-weight:900; font-size:16px; display:flex; align-items:center; padding:0 12px; }
+.round-bar { text-align:center; margin-top:10px; background:rgba(0,0,0,.85); border-radius:12px; padding:8px 20px; color:#ffd700; font-size:14px; font-weight:700; }
+#correct-popup { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); padding:12px 28px; border-radius:14px; font-size:18px; font-weight:900; opacity:0; transition:opacity .3s; }
+#correct-popup.show { opacity:1; animation:popIn .3s ease; }
+@keyframes popIn { from{transform:translateX(-50%) scale(.8)} to{transform:translateX(-50%) scale(1)} }
+</style>
+</head>
+<body>
+<div id="container">
+  <div class="scoreboard">
+    <div class="team team-red"><div class="team-name">🔴 أحمر</div><div class="team-score" id="red">0</div></div>
+    <div class="vs">VS</div>
+    <div class="team team-blue"><div class="team-name">🔵 أزرق</div><div class="team-score" id="blue">0</div></div>
+  </div>
+  <div class="round-bar" id="round-bar" style="display:none"></div>
+</div>
+<div id="correct-popup"></div>
+<script>
+const params = new URLSearchParams(location.search);
+let username = params.get('username') || '';
+const authKey = params.get('key') || '';
+const socket = io();
+
+if (!username && authKey) {
+  fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{
+    if(d.ok&&d.username){username=d.username;socket.emit('join',{username});load();}
+    else if(d.ok&&d.connectedRooms?.length){username=d.connectedRooms[0];socket.emit('join',{username});load();}
+  });
+} else if(username){socket.emit('join',{username});load();}
+
+function load(){fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{if(d.active){document.getElementById('container').style.display='block';update(d);}});}
+
+socket.on('wordwar:update',d=>{document.getElementById('container').style.display='block';update(d);});
+socket.on('wordwar:round',d=>{const b=document.getElementById('round-bar');b.style.display='block';b.textContent='الجولة '+d.round;});
+socket.on('wordwar:correct',d=>{
+  const p=document.getElementById('correct-popup');
+  p.style.background=d.team==='red'?'rgba(239,68,68,.9)':'rgba(59,130,246,.9)';
+  p.style.color='#fff';
+  p.textContent='✅ '+d.user+' — نقطة لـ '+(d.team==='red'?'أحمر':'أزرق')+'!';
+  p.classList.add('show');
+  setTimeout(()=>p.classList.remove('show'),3000);
+});
+socket.on('wordwar:end',d=>{
+  const p=document.getElementById('correct-popup');
+  const w=d.winner==='red'?'🔴 أحمر يفوز!':d.winner==='blue'?'🔵 أزرق يفوز!':'🤝 تعادل!';
+  p.style.background='rgba(0,0,0,.9)';p.style.color='#ffd700';p.textContent='⚔️ '+w;
+  p.classList.add('show');setTimeout(()=>p.classList.remove('show'),6000);
+});
+
+function update(d){document.getElementById('red').textContent=d.red.score;document.getElementById('blue').textContent=d.blue.score;}
+</script>
+</body>
+</html>
