@@ -24,10 +24,12 @@ const MOYASAR_PK = process.env.MOYASAR_PK || 'pk_test_K1YdX6c5X1vYvCByHN77jSxHkJ
 const MOYASAR_SK = process.env.MOYASAR_SK || 'sk_test_57sx5mBRNQHoAu';
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'admin2024';
 const SUBSCRIPTION_PRICE = parseInt(process.env.SUBSCRIPTION_PRICE || '8000');
-const DATA_FILE = path.join(__dirname, '../data/subscribers.json');
 
-const dataDir = path.join(__dirname, '../data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+// Use RAILWAY_VOLUME_MOUNT_PATH if available (persistent), otherwise fallback to local
+const PERSIST_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '../data');
+const DATA_FILE = path.join(PERSIST_DIR, 'subscribers.json');
+
+if (!fs.existsSync(PERSIST_DIR)) fs.mkdirSync(PERSIST_DIR, { recursive: true });
 
 function loadSubscribers() {
   try { if (fs.existsSync(DATA_FILE)) return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch(e) {}
