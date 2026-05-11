@@ -63,7 +63,10 @@
 <div class="container">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <h1>🎯 🧪 <span>BthLab</span></h1>
-    <span class="mode-badge" id="mode-badge" style="background:var(--accent2);color:#000">🎫 مشترك</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="mode-badge" id="mode-badge" style="background:var(--accent2);color:#000">🎫 مشترك</span>
+      <button onclick="logout()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🚪 خروج</button>
+    </div>
   </div>
   <p class="subtitle" id="subtitle">فعالية العجلة متاحة لك</p>
   <div class="add-box">
@@ -93,6 +96,13 @@ const urlParams = new URLSearchParams(location.search);
 const mode = urlParams.get('mode') || 'subscriber';
 const userKey = urlParams.get('key') || localStorage.getItem('subscription_key') || '';
 const ownerPw = urlParams.get('pw') || localStorage.getItem('owner_password') || '';
+
+function logout() {
+  if (!confirm('متأكد تبي تسجل خروج؟')) return;
+  localStorage.removeItem('subscription_key');
+  localStorage.removeItem('owner_password');
+  window.location.href = '/login.html';
+}
 
 const GAMES = [
   { icon:'🎰', name:'العجلة', page:'wheel.html', color:'#ffd700' },
