@@ -14,7 +14,7 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .nav-logo{font-size:18px;font-weight:900} .nav-logo span{color:var(--accent2)}
 .nav-btn{padding:8px 20px;background:var(--accent2);color:#000;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;text-decoration:none}
 
-.tabs{display:flex;gap:6px;margin-bottom:30px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;margin-bottom:30px;flex-wrap:wrap;position:sticky;top:0;z-index:10;background:var(--bg);padding:14px 0;border-bottom:1px solid var(--border)}
 .tab{padding:10px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted);transition:all .15s}
 .tab.active{background:var(--accent2);color:#000;border-color:var(--accent2)}
 
@@ -33,10 +33,12 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 /* Light mode */
 body.light{--bg:#f5f5f7;--surface:rgba(0,0,0,.03);--border:rgba(0,0,0,.08);--accent2:#0891b2;--text:#1a1a2e;--muted:#888}
 body.light .tab.active{background:#0891b2;color:#fff;border-color:#0891b2}
-body.light .highlight-box{background:rgba(255,255,255,.5);border-color:rgba(0,0,0,.08)}
+body.light .highlight-box{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.65)}
+body.light .highlight-box strong{color:#0891b2}
 body.light .policy p{color:rgba(0,0,0,.65)}
 body.light .policy ul{color:rgba(0,0,0,.65)}
 body.light .nav-btn{background:#0891b2}
+body.light .tabs{background:var(--bg)}
 
 .theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:40px;height:40px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 .theme-toggle:hover{transform:scale(1.1)}
@@ -203,7 +205,11 @@ function showTab(id) {
   document.querySelectorAll('.policy').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  event.target.classList.add('active');
+  // Find and activate the correct tab button
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.getAttribute('onclick') && t.getAttribute('onclick').includes(id)) t.classList.add('active');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function toggleTheme() {
   document.body.classList.toggle('light');
@@ -215,11 +221,13 @@ if (localStorage.getItem('theme') === 'light') {
   document.body.classList.add('light');
   document.getElementById('theme-toggle').textContent = '🌙';
 }
-// Handle hash links
+// Handle hash links from other pages
 if (location.hash) {
   const id = location.hash.replace('#','');
   const el = document.getElementById(id);
-  if (el) { document.querySelectorAll('.policy').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active')); el.classList.add('active'); }
+  if (el && el.classList.contains('policy')) {
+    showTab(id);
+  }
 }
 </script>
 </body>
