@@ -53,6 +53,23 @@ label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
 .team-blue .team-score{color:var(--blue)}
 .team-members{font-size:11px;color:var(--muted);margin-top:4px}
 .team-words{font-size:11px;color:rgba(255,255,255,.4);margin-top:6px;word-break:break-word;max-height:80px;overflow-y:auto}
+/* Answers section */
+.answers-card{margin-top:14px}
+.answers-title{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.answers-title .count{font-size:11px;color:var(--accent2)}
+.answers-columns{display:flex;gap:12px}
+.answers-col{flex:1;border-radius:12px;padding:12px}
+.answers-col.red{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)}
+.answers-col.blue{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15)}
+.answers-col-title{font-size:12px;font-weight:700;margin-bottom:8px;text-align:center}
+.answers-col.red .answers-col-title{color:var(--red)}
+.answers-col.blue .answers-col-title{color:var(--blue)}
+.answers-list{list-style:none;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.answers-list li{font-size:12px;padding:5px 10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center}
+.answers-col.red .answers-list li{background:rgba(239,68,68,.08);color:rgba(255,255,255,.7)}
+.answers-col.blue .answers-list li{background:rgba(59,130,246,.08);color:rgba(255,255,255,.7)}
+.answers-list .player-name{font-size:10px;color:var(--muted)}
+.no-answers{text-align:center;font-size:11px;color:var(--muted);padding:16px}
 .timer-display{text-align:center;font-size:32px;font-weight:900;color:var(--accent2);padding:8px}
 .category-display{text-align:center;font-size:18px;font-weight:700;color:var(--amber);padding:8px;background:rgba(245,158,11,.08);border-radius:10px;margin-bottom:8px}
 .overlay-link{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:12px;color:var(--accent2);word-break:break-all;cursor:pointer}
@@ -101,6 +118,20 @@ label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
     </div>
   </div>
 
+  <div class="card answers-card" id="answers-card" style="display:none">
+    <div class="answers-title">📝 الإجابات <span class="count" id="answers-count">0 كلمة</span></div>
+    <div class="answers-columns">
+      <div class="answers-col red">
+        <div class="answers-col-title">🔴 أحمر</div>
+        <ul class="answers-list" id="red-answers"><li class="no-answers">لا توجد إجابات بعد</li></ul>
+      </div>
+      <div class="answers-col blue">
+        <div class="answers-col-title">🔵 أزرق</div>
+        <ul class="answers-list" id="blue-answers"><li class="no-answers">لا توجد إجابات بعد</li></ul>
+      </div>
+    </div>
+  </div>
+
   <div class="card" id="live-card" style="display:none">
     <div class="category-display" id="category-display">—</div>
     <div class="timer-display" id="timer-display">01:00</div>
@@ -120,6 +151,7 @@ label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
 <script>
 const params=new URLSearchParams(location.search);const username=params.get('username')||'';const socket=io();
 let registrationLocked=false,timerInt=null,endTime=0,usedCats=new Set();
+let redWordsList=[],blueWordsList=[];
 
 const CATEGORIES=[
 {icon:'🍎',name:'فواكه',words:['تفاح','موز','برتقال','عنب','مانجو','فراولة','بطيخ','رمان','كيوي','أناناس','خوخ','مشمش','تين','تمر','كرز','توت','ليمون','جوافة','بابايا','أفوكادو','كمثرى','يوسفي']},
@@ -147,7 +179,7 @@ if(username){socket.emit('join',{username});document.getElementById('status-text
 function renderCatGrid(){document.getElementById('cats-grid').innerHTML=CATEGORIES.map((c,i)=>`<div class="cat-btn ${usedCats.has(i)?'used':''}" onclick="startRound(${i})"><div class="cat-icon">${c.icon}</div><div class="cat-name">${c.name}</div><div class="cat-count">${c.words.length} كلمة</div></div>`).join('');}
 renderCatGrid();
 
-async function startRound(idx){const cat=CATEGORIES[idx];usedCats.add(idx);const duration=parseInt(document.getElementById('duration').value)||60;const rk=document.getElementById('red-keyword').value.trim()||'أحمر';const bk=document.getElementById('blue-keyword').value.trim()||'أزرق';await fetch('/api/wordwar/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,category:cat.name,validWords:cat.words.map(w=>w.toLowerCase().replace(/\s+/g,'')),duration,redKeyword:rk,blueKeyword:bk})});document.getElementById('live-card').style.display='block';document.getElementById('category-display').textContent=cat.icon+' '+cat.name;endTime=Date.now()+duration*1000;startTimer();renderCatGrid();document.getElementById('red-words').textContent='';document.getElementById('blue-words').textContent='';}
+async function startRound(idx){const cat=CATEGORIES[idx];usedCats.add(idx);const duration=parseInt(document.getElementById('duration').value)||60;const rk=document.getElementById('red-keyword').value.trim()||'أحمر';const bk=document.getElementById('blue-keyword').value.trim()||'أزرق';await fetch('/api/wordwar/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,category:cat.name,validWords:cat.words.map(w=>w.toLowerCase().replace(/\s+/g,'')),duration,redKeyword:rk,blueKeyword:bk})});document.getElementById('live-card').style.display='block';document.getElementById('category-display').textContent=cat.icon+' '+cat.name;endTime=Date.now()+duration*1000;startTimer();renderCatGrid();document.getElementById('red-words').textContent='';document.getElementById('blue-words').textContent='';redWordsList=[];blueWordsList=[];renderAnswers();}
 
 async function stopWar(){await fetch('/api/wordwar/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});if(timerInt)clearInterval(timerInt);document.getElementById('live-card').style.display='none';}
 
@@ -160,12 +192,29 @@ function updateLockBtn(){const btn=document.getElementById('lock-btn');if(regist
 async function resetTeams(){if(!confirm('متأكد تبي تمسح كل الفرق؟'))return;await fetch('/api/wordwar/reset-teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});document.getElementById('red-score').textContent='0';document.getElementById('blue-score').textContent='0';document.getElementById('red-members').textContent='0 لاعب';document.getElementById('blue-members').textContent='0 لاعب';document.getElementById('red-words').textContent='';document.getElementById('blue-words').textContent='';}
 
 socket.on('wordwar:join',d=>{document.getElementById('red-members').textContent=d.redCount+' لاعب';document.getElementById('blue-members').textContent=d.blueCount+' لاعب';});
-socket.on('wordwar:word',d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-words').textContent=d.redWords.join('، ');document.getElementById('blue-words').textContent=d.blueWords.join('، ');});
+socket.on('wordwar:word',d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-words').textContent=d.redWords.join('، ');document.getElementById('blue-words').textContent=d.blueWords.join('، ');
+  // Add to answers
+  if(d.team==='red') redWordsList.push({word:d.word,player:d.player});
+  else blueWordsList.push({word:d.word,player:d.player});
+  renderAnswers();
+});
 socket.on('wordwar:update',d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-members').textContent=d.redCount+' لاعب';document.getElementById('blue-members').textContent=d.blueCount+' لاعب';});
 socket.on('wordwar:end',d=>{if(timerInt)clearInterval(timerInt);document.getElementById('live-card').style.display='none';const w=d.winner==='red'?'🔴 الأحمر':d.winner==='blue'?'🔵 الأزرق':'🤝 تعادل';alert('انتهت الجولة!\n'+w+' فاز!\n\n🔴 '+d.redScore+' نقطة\n🔵 '+d.blueScore+' نقطة');document.getElementById('red-words').textContent=d.redWords.join('، ');document.getElementById('blue-words').textContent=d.blueWords.join('، ');});
 socket.on('wordwar:lock',d=>{registrationLocked=d.locked;updateLockBtn();});
 
 function copyLink(){navigator.clipboard.writeText(document.getElementById('overlay-link').textContent);document.getElementById('overlay-link').style.color='#1dba72';setTimeout(()=>document.getElementById('overlay-link').style.color='',1500);}
+
+function renderAnswers(){
+  document.getElementById('answers-card').style.display='block';
+  const total=redWordsList.length+blueWordsList.length;
+  document.getElementById('answers-count').textContent=total+' كلمة';
+  const rList=document.getElementById('red-answers');
+  const bList=document.getElementById('blue-answers');
+  if(redWordsList.length===0) rList.innerHTML='<li class="no-answers">لا توجد إجابات بعد</li>';
+  else rList.innerHTML=redWordsList.map((w,i)=>`<li><span>${i+1}. ${w.word}</span><span class="player-name">${w.player}</span></li>`).join('');
+  if(blueWordsList.length===0) bList.innerHTML='<li class="no-answers">لا توجد إجابات بعد</li>';
+  else bList.innerHTML=blueWordsList.map((w,i)=>`<li><span>${i+1}. ${w.word}</span><span class="player-name">${w.player}</span></li>`).join('');
+}
 
 if(username)fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-members').textContent=d.redCount+' لاعب';document.getElementById('blue-members').textContent=d.blueCount+' لاعب';if(d.active){document.getElementById('live-card').style.display='block';document.getElementById('category-display').textContent=d.category;endTime=d.endTime;startTimer();}registrationLocked=d.registrationLocked;updateLockBtn();});
 </script>
