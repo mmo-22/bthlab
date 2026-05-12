@@ -276,26 +276,41 @@ async function connectRoom(username, sessionid = null) {
       }
     }
 
-    // Word War check
+    // Word War check — join teams + category words
     const ww = getWordWar(key);
     if (ww.active && data.comment) {
-      const comment = data.comment.trim();
-      // Join team: "أحمر" or "أزرق"
-      if (comment === 'أحمر' && !ww.teams.blue.members.has(data.userId)) {
-        ww.teams.red.members.add(data.userId);
-        broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
-      } else if (comment === 'أزرق' && !ww.teams.red.members.has(data.userId)) {
-        ww.teams.blue.members.add(data.userId);
-        broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+      const word = data.comment.trim().toLowerCase().replace(/\s+/g,'');
+      const uid = data.userId || data.uniqueId;
+      const name = data.nickname || data.uniqueId;
+      const avatar = data.profilePictureUrl || null;
+
+      // Team registration
+      if (word === ww.redKeyword && !ww.blueTeam.has(uid) && !ww.redTeam.has(uid) && !ww.registrationLocked) {
+        ww.redTeam.set(uid, { name, avatar, words: [] });
+        broadcast(key, 'wordwar:join', { team: 'red', player: name, avatar, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
+      } else if (word === ww.blueKeyword && !ww.redTeam.has(uid) && !ww.blueTeam.has(uid) && !ww.registrationLocked) {
+        ww.blueTeam.set(uid, { name, avatar, words: [] });
+        broadcast(key, 'wordwar:join', { team: 'blue', player: name, avatar, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
       }
-      // Check if correct word typed
-      if (ww.targetWord && comment === ww.targetWord && !ww.roundWinner) {
-        ww.roundWinner = data.userId;
-        const team = ww.teams.red.members.has(data.userId) ? 'red' : ww.teams.blue.members.has(data.userId) ? 'blue' : null;
-        if (team) {
-          ww.teams[team].score++;
-          broadcast(key, 'wordwar:correct', { team, user: data.nickname || data.uniqueId, word: ww.targetWord });
-          broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+      // Check if player is in a team and word is valid
+      else {
+        let team = null;
+        if (ww.redTeam.has(uid)) team = 'red';
+        else if (ww.blueTeam.has(uid)) team = 'blue';
+        if (team && word.length >= 2) {
+          const isValid = ww.validWords.length === 0 || ww.validWords.includes(word);
+          if (isValid) {
+            const teamWords = team === 'red' ? ww.redWords : ww.blueWords;
+            const oppositeWords = team === 'red' ? ww.blueWords : ww.redWords;
+            // Not already used by either team
+            if (!teamWords.has(word) && !oppositeWords.has(word)) {
+              teamWords.add(word);
+              if (team === 'red') ww.redScore++; else ww.blueScore++;
+              const member = (team === 'red' ? ww.redTeam : ww.blueTeam).get(uid);
+              if (member) member.words.push(word);
+              broadcast(key, 'wordwar:word', { team, player: name, word, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
+            }
+          }
         }
       }
     }
@@ -446,7 +461,14 @@ app.get('/api/password/:username', (req, res) => {
 // ══════════════════════════════════════════════════════════
 const wordWars = {};
 function getWordWar(key) {
-  if (!wordWars[key]) wordWars[key] = { active: false, teams: { red: { name: 'أحمر', score: 0, members: new Set() }, blue: { name: 'أزرق', score: 0, members: new Set() } }, keyword: '', targetWord: '', round: 0 };
+  if (!wordWars[key]) wordWars[key] = {
+    active: false, category: '', validWords: [], duration: 60,
+    endTime: 0, endTimer: null, registrationLocked: false,
+    redKeyword: 'أحمر', blueKeyword: 'أزرق',
+    redTeam: new Map(), blueTeam: new Map(),
+    redWords: new Set(), blueWords: new Set(),
+    redScore: 0, blueScore: 0,
+  };
   return wordWars[key];
 }
 
@@ -454,34 +476,48 @@ app.post('/api/wordwar/start', (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ww = getWordWar(key);
+  if (ww.endTimer) clearTimeout(ww.endTimer);
+
+  ww.category = req.body.category || '';
+  ww.validWords = (req.body.validWords || []).map(w => w.trim().toLowerCase().replace(/\s+/g,''));
+  ww.duration = Math.max(15, Math.min(300, parseInt(req.body.duration) || 60));
+  ww.redKeyword = (req.body.redKeyword || 'أحمر').trim().toLowerCase().replace(/\s+/g,'');
+  ww.blueKeyword = (req.body.blueKeyword || 'أزرق').trim().toLowerCase().replace(/\s+/g,'');
   ww.active = true;
-  ww.teams.red.score = 0; ww.teams.blue.score = 0;
-  ww.teams.red.members.clear(); ww.teams.blue.members.clear();
-  ww.round = 0;
-  ww.keyword = req.body.keyword || 'حرب';
-  broadcast(key, 'wordwar:update', { active: true, red: { name: ww.teams.red.name, score: 0, members: 0 }, blue: { name: ww.teams.blue.name, score: 0, members: 0 }, round: 0, targetWord: '' });
+  ww.endTime = Date.now() + ww.duration * 1000;
+  ww.registrationLocked = false;
+  ww.redWords.clear(); ww.blueWords.clear();
+  ww.redScore = 0; ww.blueScore = 0;
+  // Keep teams from previous round if not reset
+  if (req.body.resetTeams) { ww.redTeam.clear(); ww.blueTeam.clear(); }
+
+  broadcast(key, 'wordwar:start', { category: ww.category, duration: ww.duration, endTime: ww.endTime, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
+
+  ww.endTimer = setTimeout(() => {
+    if (!ww.active) return;
+    ww.active = false;
+    const winner = ww.redScore > ww.blueScore ? 'red' : ww.blueScore > ww.redScore ? 'blue' : 'tie';
+    broadcast(key, 'wordwar:end', { winner, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
+  }, ww.duration * 1000);
+
   res.json({ ok: true });
 });
 
-app.post('/api/wordwar/round', (req, res) => {
+app.post('/api/wordwar/lock', (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ww = getWordWar(key);
-  ww.round++;
-  ww.targetWord = (req.body.word || '').trim();
-  ww.roundWinner = null;
-  broadcast(key, 'wordwar:round', { round: ww.round, targetWord: ww.targetWord });
+  ww.registrationLocked = req.body.locked !== false;
+  broadcast(key, 'wordwar:lock', { locked: ww.registrationLocked });
   res.json({ ok: true });
 });
 
-app.post('/api/wordwar/score', (req, res) => {
+app.post('/api/wordwar/reset-teams', (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ww = getWordWar(key);
-  const team = req.body.team; // 'red' or 'blue'
-  const points = parseInt(req.body.points) || 1;
-  if (ww.teams[team]) ww.teams[team].score += points;
-  broadcast(key, 'wordwar:update', { active: ww.active, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '' });
+  ww.redTeam.clear(); ww.blueTeam.clear();
+  broadcast(key, 'wordwar:update', { redCount: 0, blueCount: 0, redScore: 0, blueScore: 0 });
   res.json({ ok: true });
 });
 
@@ -490,15 +526,16 @@ app.post('/api/wordwar/stop', (req, res) => {
   if (!key) return res.json({ ok: false });
   const ww = getWordWar(key);
   ww.active = false;
-  const winner = ww.teams.red.score > ww.teams.blue.score ? 'red' : ww.teams.blue.score > ww.teams.red.score ? 'blue' : 'tie';
-  broadcast(key, 'wordwar:end', { winner, red: ww.teams.red.score, blue: ww.teams.blue.score });
+  if (ww.endTimer) { clearTimeout(ww.endTimer); ww.endTimer = null; }
+  const winner = ww.redScore > ww.blueScore ? 'red' : ww.blueScore > ww.redScore ? 'blue' : 'tie';
+  broadcast(key, 'wordwar:end', { winner, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
   res.json({ ok: true, winner });
 });
 
 app.get('/api/wordwar/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const ww = getWordWar(key);
-  res.json({ active: ww.active, red: { name: ww.teams.red.name, score: ww.teams.red.score, members: ww.teams.red.members.size }, blue: { name: ww.teams.blue.name, score: ww.teams.blue.score, members: ww.teams.blue.members.size }, round: ww.round, targetWord: ww.targetWord || '', keyword: ww.keyword });
+  res.json({ active: ww.active, category: ww.category, duration: ww.duration, endTime: ww.endTime, registrationLocked: ww.registrationLocked, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
 });
 
 // ══════════════════════════════════════════════════════════
