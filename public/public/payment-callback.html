@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نتيجة الدفع — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0a0a0f; --surface:#111118; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#25f4ee; --text:#f0f0f5; --muted:#666; --green:#1dba72; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .container { max-width:460px; width:100%; text-align:center; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:32px 24px; }
+  .icon { font-size:64px; margin-bottom:16px; }
+  .title { font-size:22px; font-weight:900; margin-bottom:8px; }
+  .desc { font-size:14px; color:var(--muted); margin-bottom:24px; }
+  .key-box { background:#0a1a10; border:2px solid var(--green); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .key-label { font-size:12px; color:var(--green); margin-bottom:8px; }
+  .key-value { font-size:24px; font-weight:900; color:var(--green); letter-spacing:2px; font-family:monospace; }
+  .copy-btn { background:var(--green); color:#fff; border:none; padding:10px 24px; border-radius:10px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; margin-bottom:16px; }
+  .copy-btn:hover { opacity:.85; }
+  .info { font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.8; }
+  .btn { display:inline-block; background:var(--accent2); color:#000; text-decoration:none; padding:12px 28px; border-radius:10px; font-family:inherit; font-size:15px; font-weight:700; }
+  .error-card { border-color:rgba(239,68,68,.3); }
+  .error-title { color:var(--accent); }
+  .loading { color:var(--accent2); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card" id="card">
+    <div class="icon">⏳</div>
+    <div class="title loading">جاري التحقق من الدفع...</div>
+  </div>
+</div>
+<script>
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const paymentId = params.get('id');
+  const status = params.get('status');
+  const card = document.getElementById('card');
+
+  if (!paymentId || status !== 'paid') {
+    card.classList.add('error-card');
+    card.innerHTML = `
+      <div class="icon">❌</div>
+      <div class="title error-title">فشل الدفع</div>
+      <div class="desc">${params.get('message') || 'لم يتم إكمال عملية الدفع'}</div>
+      <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+    `;
+    return;
+  }
+
+  // Get saved info
+  let info = {};
+  try { info = JSON.parse(localStorage.getItem('pending_payment') || '{}'); } catch(e) {}
+  localStorage.removeItem('pending_payment');
+
+  try {
+    const res = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paymentId,
+        email: info.email || '',
+        name: info.name || '',
+      }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      localStorage.setItem('subscription_key', data.key);
+      card.innerHTML = `
+        <div class="icon">🎉</div>
+        <div class="title" style="color:var(--green)">تم الاشتراك بنجاح!</div>
+        <div class="desc">احفظ مفتاحك — تحتاجه لتسجيل الدخول</div>
+        <div class="key-box">
+          <div class="key-label">مفتاح الاشتراك</div>
+          <div class="key-value" id="key-value">${data.key}</div>
+        </div>
+        <button class="copy-btn" onclick="copyKey()">📋 نسخ المفتاح</button>
+        <div class="info">
+          ⏰ ينتهي الاشتراك: ${new Date(data.expiresAt).toLocaleDateString('ar-SA')}<br>
+          📧 تم إرسال المفتاح على: ${info.email || '—'}
+        </div>
+        <a href="/login.html" class="btn">🔑 سجل دخول</a>
+      `;
+    } else {
+      card.classList.add('error-card');
+      card.innerHTML = `
+        <div class="icon">⚠️</div>
+        <div class="title error-title">خطأ</div>
+        <div class="desc">${data.error || 'حدث خطأ غير متوقع'}</div>
+        <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+      `;
+    }
+  } catch(e) {
+    card.classList.add('error-card');
+    card.innerHTML = `
+      <div class="icon">⚠️</div>
+      <div class="title error-title">خطأ في الاتصال</div>
+      <div class="desc">تأكد من اتصالك بالإنترنت</div>
+      <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+    `;
+  }
+}
+
+function copyKey() {
+  const key = document.getElementById('key-value').textContent;
+  navigator.clipboard.writeText(key);
+  document.querySelector('.copy-btn').textContent = '✅ تم النسخ!';
+  setTimeout(() => document.querySelector('.copy-btn').textContent = '📋 نسخ المفتاح', 2000);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#25f4ee; --text:#f0f0f5; --muted:#666; --green:#1dba72; --red:#ef4444; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; padding:24px 16px; }
+  .container { max-width:750px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:700; margin-bottom:4px; } h1 span { color:var(--accent); }
+  .subtitle { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .subtitle a { color:var(--accent2); text-decoration:none; }
+  .add-box { display:flex; gap:10px; margin-bottom:24px; }
+  .add-box input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:15px; padding:10px 14px; border-radius:10px; outline:none; direction:ltr; }
+  .add-box input:focus { border-color:var(--accent2); }
+  .add-box input::placeholder { color:var(--muted); }
+  .btn { background:var(--accent); color:#fff; border:none; font-family:inherit; font-size:14px; font-weight:700; padding:10px 20px; border-radius:10px; cursor:pointer; white-space:nowrap; }
+  .btn:hover { opacity:.85; }
+  .rooms { display:flex; flex-direction:column; gap:14px; }
+  .room-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .room-card.connected { border-color:rgba(29,186,114,.3); }
+  .room-header { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .status-dot.connected { background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse 1.5s infinite; }
+  .status-dot.connecting,.status-dot.retrying { background:#f59e0b; animation:pulse .8s infinite; }
+  .status-dot.error,.status-dot.ended,.status-dot.disconnected { background:var(--red); }
+  .status-dot.idle { background:var(--muted); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .room-info { flex:1; }
+  .room-name { font-size:16px; font-weight:700; direction:ltr; }
+  .room-meta { font-size:12px; color:var(--muted); margin-top:2px; }
+  .room-stats { display:flex; gap:14px; font-size:12px; margin-top:6px; }
+  .room-stats span { color:var(--muted); } .room-stats strong { color:var(--text); }
+  .room-top-actions { display:flex; gap:8px; }
+  .top-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer; font-family:inherit; }
+  .top-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .top-btn.remove { color:var(--red); border-color:rgba(239,68,68,.2); }
+  .games-label { font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:500; }
+  .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(85px,1fr)); gap:8px; }
+  .game-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:12px 6px; border-radius:12px; background:var(--surface2); border:1px solid var(--border); cursor:pointer; transition:all .15s; text-decoration:none; }
+  .game-btn:hover { border-color:rgba(255,255,255,.2); background:rgba(255,255,255,.04); transform:translateY(-1px); }
+  .game-icon { font-size:24px; }
+  .game-name { font-size:10px; font-weight:700; color:var(--muted); text-align:center; }
+  .empty { text-align:center; color:var(--muted); padding:40px; font-size:14px; }
+  .mode-badge { font-size:11px; padding:4px 10px; border-radius:20px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); color:var(--text); padding:10px 20px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:100; }
+  .toast.show { opacity:1; }
+  .link-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface2); border-radius:10px; }
+  .link-row .link-icon { font-size:20px; flex-shrink:0; }
+  .link-row .link-info { flex:1; min-width:0; }
+  .link-row .link-name { font-size:13px; font-weight:700; color:var(--text); }
+  .link-row .link-url { font-size:10px; color:var(--muted); font-family:monospace; direction:ltr; text-align:left; word-break:break-all; margin-top:2px; }
+  .link-row .link-copy { background:var(--accent2); color:#000; border:none; font-family:inherit; font-size:11px; font-weight:700; padding:6px 14px; border-radius:8px; cursor:pointer; flex-shrink:0; transition:all .15s; }
+  .link-row .link-copy:hover { opacity:.85; }
+  .link-row .link-copy.copied { background:var(--green); color:#fff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <h1>🎯 🧪 <span>BthLab</span></h1>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="mode-badge" id="mode-badge" style="background:var(--accent2);color:#000">🎫 مشترك</span>
+      <button onclick="logout()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🚪 خروج</button>
+    </div>
+  </div>
+  <p class="subtitle" id="subtitle">فعالية العجلة متاحة لك</p>
+  <div class="add-box">
+    <input type="text" id="session-input" placeholder="sessionid (اختياري)" dir="ltr" style="font-size:12px;opacity:.7">
+  </div>
+  <div class="add-box">
+    <input type="text" id="username-input" placeholder="@username" dir="ltr">
+    <button class="btn" onclick="addRoom()">+ اتصل</button>
+  </div>
+  <div class="rooms" id="rooms-list">
+    <div class="empty">لا يوجد اتصالات — أضف يوزرنيم فوق</div>
+  </div>
+
+  <!-- My Links Section -->
+  <div class="card" id="my-links-card" style="margin-top:20px;display:none">
+    <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:12px">🔗 روابطك الجاهزة لـ OBS</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;border-right:3px solid var(--accent2);padding-right:10px;line-height:1.8">
+      انسخ الرابط وحطه كـ <strong style="color:var(--text)">Browser Source</strong> في OBS — الرابط ثابت ومربوط بمفتاحك، ما يحتاج تغيره
+    </div>
+    <div id="links-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const socket = io();
+const urlParams = new URLSearchParams(location.search);
+const mode = urlParams.get('mode') || 'subscriber';
+const userKey = urlParams.get('key') || localStorage.getItem('subscription_key') || '';
+const ownerPw = urlParams.get('pw') || localStorage.getItem('owner_password') || '';
+
+function logout() {
+  if (!confirm('متأكد تبي تسجل خروج؟')) return;
+  localStorage.removeItem('subscription_key');
+  localStorage.removeItem('owner_password');
+  window.location.href = '/login.html';
+}
+
+const GAMES = [
+  { icon:'🎰', name:'العجلة', page:'wheel.html', color:'#ffd700' },
+  { icon:'🔐', name:'كلمة السر', page:'password.html', color:'#25f4ee' },
+  { icon:'⚔️', name:'حرب الكلمات', page:'wordwar.html', color:'#ef4444' },
+  { icon:'❓', name:'سؤال وجواب', page:'quiz.html', color:'#a57afa' },
+  { icon:'🎯', name:'التصويت', page:'poll.html', color:'#f59e0b' },
+];
+
+// Owner mode: show extra tools
+if (mode === 'owner') {
+  document.getElementById('mode-badge').style.background = 'var(--accent)';
+  document.getElementById('mode-badge').style.color = '#fff';
+  document.getElementById('mode-badge').textContent = '👑 مالك';
+  document.getElementById('subtitle').innerHTML = 'كل الفعاليات متاحة | <a href="/subscriptions.html?pw=' + encodeURIComponent(ownerPw) + '">📋 إدارة الاشتراكات</a>';
+}
+
+const roomsEl = document.getElementById('rooms-list');
+let roomsData = {};
+async function apiFetch(url, opts={}) { return fetch(url, { ...opts, headers:{'Content-Type':'application/json',...(opts.headers||{})} }); }
+apiFetch('/api/rooms').then(r=>r.json()).then(list => { list.forEach(r => { roomsData[r.username]=r; }); render(); });
+socket.on('room:status', ({ username, status, viewers }) => {
+  if (status === 'removed') { delete roomsData[username]; render(); return; }
+  if (!roomsData[username]) roomsData[username]={ username, stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
+  roomsData[username].status = status;
+  if (viewers) roomsData[username].stats.viewers = viewers;
+  render();
+});
+async function addRoom() {
+  const input=document.getElementById('username-input');
+  const sessionInput=document.getElementById('session-input');
+  const username=input.value.trim().replace('@','');
+  if(!username) return;
+  input.value='';
+  const res=await apiFetch('/api/connect',{method:'POST',body:JSON.stringify({username,sessionid:sessionInput.value.trim()})});
+  const data=await res.json();
+  if(data.ok){
+    roomsData[data.username]={username:data.username,status:'connecting',stats:{viewers:0,likes:0,diamonds:0,shares:0},msgCount:0};
+    render();
+    showToast('جاري الاتصال بـ @'+data.username+'...');
+    // Save TikTok username to subscriber record
+    if (userKey) {
+      apiFetch('/api/save-username', { method:'POST', body: JSON.stringify({ key: userKey, username: data.username }) }).catch(()=>{});
+    }
+  }
+}
+async function removeRoom(username) {
+  await apiFetch('/api/disconnect',{method:'POST',body:JSON.stringify({username})});
+  delete roomsData[username]; render(); showToast('تم قطع @'+username);
+}
+function statusLabel(s){return{connected:'متصل',connecting:'جاري الاتصال',disconnected:'منقطع',error:'خطأ',retrying:'إعادة المحاولة...',ended:'انتهى البث',idle:'غير نشط'}[s]||s;}
+function render(){
+  const keys=Object.keys(roomsData);
+  if(!keys.length){roomsEl.innerHTML='<div class="empty">لا يوجد اتصالات — أضف يوزرنيم فوق</div>';return;}
+  roomsEl.innerHTML=keys.map(key=>{
+    const r=roomsData[key],status=r.status||'idle',stats=r.stats||{};
+    const authParam = mode==='owner' ? 'pw='+encodeURIComponent(ownerPw) : 'key='+encodeURIComponent(userKey);
+    const gamesHtml=GAMES.map(g=>
+      '<a class="game-btn" href="'+location.origin+'/'+g.page+'?username='+r.username+'&'+authParam+'" target="_blank" style="border-color:'+g.color+'22">'+
+      '<span class="game-icon">'+g.icon+'</span><span class="game-name" style="color:'+g.color+'">'+g.name+'</span></a>'
+    ).join('');
+    return '<div class="room-card '+status+'"><div class="room-header"><div class="status-dot '+status+'"></div><div class="room-info"><div class="room-name">@'+r.username+'</div><div class="room-meta">'+statusLabel(status)+'</div><div class="room-stats"><span>👁️ <strong>'+(stats.viewers||0).toLocaleString()+'</strong></span><span>❤️ <strong>'+(stats.likes||0).toLocaleString()+'</strong></span><span>💎 <strong>'+(stats.diamonds||0).toLocaleString()+'</strong></span></div></div><div class="room-top-actions"><button class="top-btn remove" onclick="removeRoom(\''+r.username+'\')">✕ قطع</button></div></div><div class="games-label">🎮 الفعاليات</div><div class="games-grid">'+gamesHtml+'</div></div>';
+  }).join('');
+}
+document.getElementById('username-input').addEventListener('keydown', e=>{if(e.key==='Enter')addRoom();});
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+// ── My Links ────────────────────────────────────────────
+function loadMyLinks() {
+  const authParam = mode === 'owner' ? '' : userKey;
+  if (!authParam && mode !== 'owner') return;
+  const keyParam = mode === 'owner' ? '' : userKey;
+  if (!keyParam) return;
+
+  fetch('/api/my-links?key=' + encodeURIComponent(keyParam))
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) return;
+      const card = document.getElementById('my-links-card');
+      card.style.display = 'block';
+      const linksEl = document.getElementById('links-list');
+      const linkItems = [
+        { icon: '🎰', name: 'عجلة الحظ (Overlay)', url: data.links.wheelOverlay, desc: 'حطه في OBS كـ Browser Source' },
+        { icon: '💬', name: 'شات البث (Overlay)', url: data.links.chatOverlay, desc: 'يعرض الشات على البث' },
+        { icon: '🔊', name: 'تحكم الأصوات', url: data.links.sounds, desc: 'تحكم في أصوات الأحداث' },
+      ];
+      linksEl.innerHTML = linkItems.map((l, i) => `
+        <div class="link-row">
+          <div class="link-icon">${l.icon}</div>
+          <div class="link-info">
+            <div class="link-name">${l.name}</div>
+            <div class="link-url">${l.url}</div>
+          </div>
+          <button class="link-copy" id="copy-link-${i}" onclick="copyLink(${i}, '${l.url.replace(/'/g, "\\'")}')">📋 نسخ</button>
+        </div>
+      `).join('');
+    })
+    .catch(() => {});
+}
+
+function copyLink(idx, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copy-link-' + idx);
+    btn.textContent = '✅ تم!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 نسخ'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// Save TikTok username to subscriber record when connecting
+const origAddRoom = addRoom;
+async function addRoomAndSave() {
+  const input = document.getElementById('username-input');
+  const uname = input.value.trim().replace('@','');
+  await origAddRoom.call ? addRoom() : null;
+  // After connecting, save username to subscriber
+  if (userKey && uname) {
+    fetch('/api/save-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: userKey, username: uname }),
+    }).catch(() => {});
+  }
+}
+
+if (userKey) loadMyLinks();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Quiz Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:transparent; width:100vw; height:100vh; font-family:'Tajawal',sans-serif; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; padding-bottom:30px; }
+#container { display:none; max-width:500px; width:90vw; }
+.quiz-card { background:rgba(0,0,0,.88); border:2px solid rgba(37,244,238,.3); border-radius:20px; padding:20px 24px; backdrop-filter:blur(8px); }
+.question { font-size:18px; font-weight:900; color:#fff; text-align:center; margin-bottom:14px; line-height:1.6; }
+.choices { display:flex; flex-direction:column; gap:8px; }
+.choice { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); transition:all .3s; }
+.choice-num { width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,.1); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#fff; flex-shrink:0; }
+.choice-text { font-size:15px; color:#fff; flex:1; }
+.choice-bar { height:4px; border-radius:2px; background:rgba(255,255,255,.1); flex:1; max-width:80px; overflow:hidden; }
+.choice-bar-fill { height:100%; border-radius:2px; transition:width .5s; }
+.choice.correct { border-color:#1dba72; background:rgba(29,186,114,.15); }
+.choice.correct .choice-num { background:#1dba72; }
+.choice.wrong { opacity:.5; }
+.timer-bar { height:4px; background:rgba(255,255,255,.1); border-radius:2px; margin-top:12px; overflow:hidden; }
+.timer-fill { height:100%; background:#25f4ee; transition:width .2s linear; }
+.count-bar { text-align:center; font-size:12px; color:rgba(255,255,255,.5); margin-top:8px; }
+#winner-bar { display:none; text-align:center; padding:10px; margin-top:8px; background:rgba(255,215,0,.15); border-radius:10px; color:#ffd700; font-weight:900; font-size:16px; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div class="quiz-card">
+    <div class="question" id="question"></div>
+    <div class="choices" id="choices"></div>
+    <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+    <div class="count-bar" id="count-bar">0 إجابة</div>
+    <div id="winner-bar"></div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+let username = params.get('username') || '';
+const authKey = params.get('key') || '';
+const socket = io();
+let timerInterval = null;
+let endTime = 0;
+let totalTime = 30;
+let choicesData = [];
+
+if (!username && authKey) {
+  fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{
+    if(d.ok&&d.username){username=d.username;socket.emit('join',{username});}
+    else if(d.ok&&d.connectedRooms?.length){username=d.connectedRooms[0];socket.emit('join',{username});}
+  });
+} else if(username) socket.emit('join',{username});
+
+socket.on('quiz:start', (data) => {
+  document.getElementById('container').style.display = 'block';
+  document.getElementById('question').textContent = data.question;
+  choicesData = data.choices;
+  document.getElementById('choices').innerHTML = data.choices.map((c, i) =>
+    `<div class="choice" id="choice-${i}"><span class="choice-num">${i+1}</span><span class="choice-text">${esc(c)}</span></div>`
+  ).join('');
+  document.getElementById('count-bar').textContent = '0 إجابة';
+  document.getElementById('winner-bar').style.display = 'none';
+  endTime = data.endTime;
+  totalTime = data.timer;
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 100);
+});
+
+socket.on('quiz:answer', (data) => {
+  document.getElementById('count-bar').textContent = data.totalAnswers + ' إجابة';
+});
+
+socket.on('quiz:end', (data) => {
+  if (timerInterval) clearInterval(timerInterval);
+  document.getElementById('timer-fill').style.width = '0%';
+  const total = data.totalAnswers || 1;
+  const colors = ['#ff0050','#25f4ee','#ffd700','#1dba72'];
+  choicesData.forEach((c, i) => {
+    const el = document.getElementById('choice-' + i);
+    if (!el) return;
+    if (i === data.correctIndex) el.classList.add('correct');
+    else el.classList.add('wrong');
+    const count = data.results[i] || 0;
+    const pct = Math.round((count / total) * 100);
+    el.innerHTML += `<div class="choice-bar"><div class="choice-bar-fill" style="width:${pct}%;background:${colors[i%4]}"></div></div><span style="font-size:11px;color:#aaa;min-width:30px">${pct}%</span>`;
+  });
+  if (data.winner) {
+    document.getElementById('winner-bar').style.display = 'block';
+    document.getElementById('winner-bar').textContent = '🏆 ' + data.winner.name;
+  }
+  setTimeout(() => { document.getElementById('container').style.display = 'none'; }, 8000);
+});
+
+function updateTimer() {
+  const remain = Math.max(0, endTime - Date.now());
+  const pct = (remain / (totalTime * 1000)) * 100;
+  document.getElementById('timer-fill').style.width = pct + '%';
+  if (remain <= 0 && timerInterval) clearInterval(timerInterval);
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

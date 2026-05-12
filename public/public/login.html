@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تسجيل دخول — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.moyasar.com/mpf/1.14.0/moyasar.css">
+<script src="https://cdn.moyasar.com/mpf/1.14.0/moyasar.js"></script>
+<style>
+  :root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#555;--green:#1dba72;--red:#ef4444}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .container{max-width:440px;width:100%}
+  .logo{text-align:center;margin-bottom:28px}
+  .logo h1{font-size:24px;font-weight:900} .logo h1 span{color:var(--accent2)}
+  .logo p{color:var(--muted);font-size:13px;margin-top:4px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:0;overflow:hidden}
+  .tabs{display:flex;border-bottom:1px solid var(--border)}
+  .tab{flex:1;padding:14px;text-align:center;background:transparent;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;color:var(--muted);transition:all .15s;position:relative}
+  .tab.active{color:var(--accent2)}
+  .tab.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--accent2);border-radius:2px}
+  .tab:hover{color:var(--text)}
+  .tab-content{padding:24px;display:none}
+  .tab-content.active{display:block}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field input{width:100%;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:15px;text-align:center;letter-spacing:1px;direction:ltr;transition:border-color .2s}
+  .field input:focus{border-color:var(--accent2);outline:none}
+  .field input::placeholder{color:var(--muted);letter-spacing:0}
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
+  .btn:hover{opacity:.9;transform:translateY(-1px)}
+  .btn-sub{background:var(--accent2);color:#000}
+  .btn-owner{background:var(--accent);color:#fff}
+  .msg{text-align:center;margin-top:12px;font-size:13px;padding:10px;border-radius:8px;display:none}
+  .msg.error{display:block;background:rgba(239,68,68,.1);color:var(--red)}
+  .msg.success{display:block;background:rgba(29,186,114,.1);color:var(--green)}
+
+  /* Light mode */
+  body.light{--bg:#f5f5f7;--surface:rgba(0,0,0,.03);--surface2:rgba(0,0,0,.05);--border:rgba(0,0,0,.08);--text:#1a1a2e;--muted:#888;--accent:#ff0050;--accent2:#0891b2;--green:#16a34a;--red:#dc2626}
+  body.light .tab.active{background:#0891b2;color:#fff;border-color:#0891b2}
+  body.light .btn-sub{background:#0891b2}
+  body.light .subscribe-box{background:rgba(255,255,255,.5);border-color:rgba(0,0,0,.08)}
+  body.light .nav-btn{background:#0891b2}
+
+  .theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:40px;height:40px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  .theme-toggle:hover{transform:scale(1.1)}
+  .divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-size:12px}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+  .subscribe-box{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-top:0}
+  .subscribe-title{font-size:15px;font-weight:700;margin-bottom:4px;color:var(--accent2)}
+  .subscribe-desc{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .price-inline{display:flex;align-items:baseline;gap:4px;justify-content:center;margin-bottom:14px}
+  .price-inline .num{font-size:28px;font-weight:900;color:var(--text)}
+  .price-inline .unit{font-size:13px;color:var(--muted)}
+  .mysr-form{margin-top:12px}
+  .trust-mini{display:flex;justify-content:center;gap:14px;margin-top:12px;font-size:10px;color:var(--muted)}
+  .back{text-align:center;margin-top:16px}
+  .back a{color:var(--muted);font-size:13px;text-decoration:none}
+  .back a:hover{color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <h1>🧪 <span>BthLab</span></h1>
+    <p>سجل دخول أو اشترك للوصول للفعاليات</p>
+  </div>
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('sub')">🎫 مشترك</button>
+      <button class="tab" onclick="switchTab('subscribe')">🚀 اشتراك جديد</button>
+      <button class="tab" onclick="switchTab('owner')">👑 مالك</button>
+    </div>
+
+    <!-- Tab: Login with key -->
+    <div class="tab-content active" id="tab-sub">
+      <div class="field">
+        <label>مفتاح الاشتراك</label>
+        <input type="text" id="sub-key" placeholder="TLR-XXXXXXXX" dir="ltr">
+      </div>
+      <button class="btn btn-sub" onclick="loginSub()">🔓 دخول</button>
+      <div class="msg" id="sub-msg"></div>
+    </div>
+
+    <!-- Tab: New subscription -->
+    <div class="tab-content" id="tab-subscribe">
+      <div class="subscribe-box">
+        <div class="subscribe-title">🚀 اشترك الحين</div>
+        <div class="subscribe-desc">ادفع واحصل على مفتاح الدخول فوراً</div>
+        <div class="price-inline">
+          <span class="num">80</span>
+          <span class="unit">ريال / شهرياً</span>
+        </div>
+        <div class="field">
+          <label>الاسم</label>
+          <input type="text" id="sub-name" placeholder="اسمك" style="text-align:right;letter-spacing:0">
+        </div>
+        <div class="field">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="sub-email" placeholder="email@example.com" dir="ltr" style="text-align:left;letter-spacing:0">
+        </div>
+        <div class="mysr-form"></div>
+        <div class="trust-mini">
+          <span>🔒 دفع آمن</span>
+          <span>💳 مدى / فيزا</span>
+          <span>🇸🇦 ميسّر</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Owner login -->
+    <div class="tab-content" id="tab-owner">
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input type="password" id="owner-pw" placeholder="••••••••">
+      </div>
+      <button class="btn btn-owner" onclick="loginOwner()">👑 دخول المالك</button>
+      <div class="msg" id="owner-msg"></div>
+    </div>
+  </div>
+  <div class="back"><a href="/">← الرئيسية</a></div>
+</div>
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">☀️</button>
+<script>
+function switchTab(t) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + t).classList.add('active');
+  const tabs = document.querySelectorAll('.tab');
+  const idx = t === 'sub' ? 0 : t === 'subscribe' ? 1 : 2;
+  tabs[idx].classList.add('active');
+}
+
+const savedKey = localStorage.getItem('subscription_key');
+if (savedKey) document.getElementById('sub-key').value = savedKey;
+
+async function loginSub() {
+  const key = document.getElementById('sub-key').value.trim();
+  const msg = document.getElementById('sub-msg');
+  if (!key) { msg.className = 'msg error'; msg.textContent = 'أدخل مفتاح الاشتراك'; return; }
+  const res = await fetch('/api/validate-key?key=' + encodeURIComponent(key));
+  const data = await res.json();
+  if (data.valid) {
+    localStorage.setItem('subscription_key', key);
+    msg.className = 'msg success';
+    msg.textContent = 'مرحباً ' + (data.name || '') + '! جاري التحويل...';
+    setTimeout(() => { window.location.href = '/admin.html?mode=subscriber&key=' + encodeURIComponent(key); }, 800);
+  } else if (data.expired) {
+    msg.className = 'msg error'; msg.textContent = 'انتهى اشتراكك — جدد من تبويب "اشتراك جديد"';
+  } else {
+    msg.className = 'msg error'; msg.textContent = 'مفتاح غير صالح';
+  }
+}
+
+async function loginOwner() {
+  const pw = document.getElementById('owner-pw').value.trim();
+  const msg = document.getElementById('owner-msg');
+  if (!pw) { msg.className = 'msg error'; msg.textContent = 'أدخل كلمة المرور'; return; }
+  const res = await fetch('/api/validate-owner', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ password: pw }) });
+  const data = await res.json();
+  if (data.valid) {
+    localStorage.setItem('owner_password', pw);
+    msg.className = 'msg success'; msg.textContent = 'مرحباً! جاري التحويل...';
+    setTimeout(() => { window.location.href = '/admin.html?mode=owner&pw=' + encodeURIComponent(pw); }, 800);
+  } else {
+    msg.className = 'msg error'; msg.textContent = 'كلمة المرور خاطئة';
+  }
+}
+
+document.getElementById('sub-key').addEventListener('keydown', e => { if(e.key==='Enter') loginSub(); });
+document.getElementById('owner-pw').addEventListener('keydown', e => { if(e.key==='Enter') loginOwner(); });
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('theme-toggle').textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+if (localStorage.getItem('theme') === 'light') {
+  document.body.classList.add('light');
+  document.getElementById('theme-toggle').textContent = '🌙';
+}
+
+// Init Moyasar
+Moyasar.init({
+  element: '.mysr-form',
+  amount: 8000,
+  currency: 'SAR',
+  description: 'BthLab — اشتراك شهري',
+  publishable_api_key: 'pk_test_K1YdX6c5X1vYvCByHN77jSxHkJikW9LvAnGmkcaM',
+  callback_url: location.origin + '/payment-callback.html',
+  methods: ['creditcard'],
+  supported_networks: ['mada', 'visa', 'mastercard'],
+  on_completed: function(payment) {
+    localStorage.setItem('pending_payment', JSON.stringify({
+      id: payment.id,
+      name: document.getElementById('sub-name').value.trim(),
+      email: document.getElementById('sub-email').value.trim(),
+    }));
+  },
+});
+</script>
+</body>
+</html>

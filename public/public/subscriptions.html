@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>إدارة الاشتراكات — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#25f4ee; --text:#f0f0f5; --muted:#666; --green:#1dba72; --red:#ef4444; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; padding:20px; }
+  .container { max-width:800px; margin:0 auto; }
+  h1 { font-size:22px; margin-bottom:4px; } h1 span { color:var(--accent2); }
+  .subtitle { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px; }
+  .card-title { font-size:15px; font-weight:700; margin-bottom:12px; color:var(--accent2); }
+  .stats { display:flex; gap:12px; margin-bottom:16px; }
+  .stat { flex:1; background:var(--surface2); border-radius:10px; padding:14px; text-align:center; }
+  .stat-num { font-size:28px; font-weight:900; }
+  .stat-label { font-size:11px; color:var(--muted); margin-top:4px; }
+  .add-form { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .add-form input { flex:1; min-width:100px; padding:10px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:13px; }
+  .btn { padding:10px 16px; border:none; border-radius:8px; font-family:inherit; font-weight:700; cursor:pointer; font-size:13px; }
+  .btn-add { background:var(--green); color:#fff; }
+  .sub-list { display:flex; flex-direction:column; gap:8px; }
+  .sub-item { display:flex; align-items:center; gap:10px; padding:12px; background:var(--surface2); border-radius:10px; flex-wrap:wrap; }
+  .sub-item.expired { opacity:.5; }
+  .sub-key { font-family:monospace; font-size:14px; font-weight:700; color:var(--accent2); min-width:130px; cursor:pointer; }
+  .sub-info { flex:1; min-width:150px; }
+  .sub-name { font-weight:700; font-size:13px; }
+  .sub-email { font-size:11px; color:var(--muted); }
+  .sub-dates { font-size:11px; color:var(--muted); }
+  .sub-status { font-size:11px; padding:3px 8px; border-radius:6px; font-weight:700; }
+  .sub-status.active { background:rgba(29,186,114,.15); color:var(--green); }
+  .sub-status.inactive { background:rgba(239,68,68,.15); color:var(--red); }
+  .sub-status.expired-status { background:rgba(245,158,11,.15); color:#f59e0b; }
+  .sub-actions { display:flex; gap:4px; }
+  .sub-actions button { font-size:11px; padding:4px 10px; border:1px solid var(--border); background:var(--surface); color:var(--muted); border-radius:6px; cursor:pointer; font-family:inherit; }
+  .sub-actions button:hover { border-color:var(--accent2); color:var(--accent2); }
+  .sub-actions button.del:hover { border-color:var(--red); color:var(--red); }
+  .empty { text-align:center; padding:30px; color:var(--muted); font-size:13px; }
+  .back { text-align:center; margin-top:16px; }
+  .back a { color:var(--muted); font-size:13px; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>👑 إدارة <span>الاشتراكات</span></h1>
+  <p class="subtitle">إضافة وتعديل وحذف المشتركين</p>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="stat-num" id="total-count">0</div><div class="stat-label">إجمالي</div></div>
+    <div class="stat"><div class="stat-num" id="active-count" style="color:var(--green)">0</div><div class="stat-label">نشط</div></div>
+    <div class="stat"><div class="stat-num" id="expired-count" style="color:#f59e0b">0</div><div class="stat-label">منتهي</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">➕ إضافة مشترك يدوي</div>
+    <div class="add-form">
+      <input type="text" id="add-name" placeholder="الاسم">
+      <input type="email" id="add-email" placeholder="البريد">
+      <input type="number" id="add-days" placeholder="عدد الأيام" value="30" min="1" style="max-width:100px">
+      <button class="btn btn-add" onclick="addManual()">+ إضافة</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 المشتركين</div>
+    <div class="sub-list" id="sub-list"><div class="empty">جاري التحميل...</div></div>
+  </div>
+
+  <div class="back"><a href="/admin.html">← رجوع للأدمن</a></div>
+</div>
+<script>
+const pw = new URLSearchParams(location.search).get('pw') || localStorage.getItem('owner_password') || '';
+
+async function loadSubs() {
+  const res = await fetch('/api/subscribers?pw=' + encodeURIComponent(pw));
+  if (res.status === 403) { alert('كلمة المرور خاطئة'); window.location.href = '/login.html'; return; }
+  const list = await res.json();
+  renderSubs(list);
+}
+
+function renderSubs(list) {
+  document.getElementById('total-count').textContent = list.length;
+  document.getElementById('active-count').textContent = list.filter(s => s.active && !s.isExpired).length;
+  document.getElementById('expired-count').textContent = list.filter(s => s.isExpired).length;
+
+  const el = document.getElementById('sub-list');
+  if (!list.length) { el.innerHTML = '<div class="empty">لا يوجد مشتركين</div>'; return; }
+
+  el.innerHTML = list.map(s => {
+    const statusCls = s.isExpired ? 'expired-status' : s.active ? 'active' : 'inactive';
+    const statusText = s.isExpired ? 'منتهي' : s.active ? 'نشط' : 'معطل';
+    return `
+      <div class="sub-item ${s.isExpired ? 'expired' : ''}">
+        <div class="sub-key" onclick="navigator.clipboard.writeText('${s.key}')" title="انقر للنسخ">${s.key}</div>
+        <div class="sub-info">
+          <div class="sub-name">${esc(s.name || '—')}</div>
+          <div class="sub-email">${esc(s.email || '—')}</div>
+          <div class="sub-dates">إنشاء: ${new Date(s.createdAt).toLocaleDateString('ar-SA')} | انتهاء: ${new Date(s.expiresAt).toLocaleDateString('ar-SA')}</div>
+        </div>
+        <span class="sub-status ${statusCls}">${statusText}</span>
+        <div class="sub-actions">
+          <button onclick="toggleSub('${s.key}')">${s.active ? '⏸ تعطيل' : '▶ تفعيل'}</button>
+          <button onclick="extendSub('${s.key}')">+30 يوم</button>
+          <button class="del" onclick="deleteSub('${s.key}')">🗑️</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function addManual() {
+  const name = document.getElementById('add-name').value.trim();
+  const email = document.getElementById('add-email').value.trim();
+  const days = document.getElementById('add-days').value || 30;
+  const res = await fetch('/api/subscribers/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pw, name, email, days }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    alert('تم إضافة المشترك! المفتاح: ' + data.key);
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-email').value = '';
+    loadSubs();
+  }
+}
+
+async function toggleSub(key) {
+  await fetch('/api/subscribers/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pw, key }) });
+  loadSubs();
+}
+
+async function extendSub(key) {
+  await fetch('/api/subscribers/extend', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pw, key, days:30 }) });
+  loadSubs();
+}
+
+async function deleteSub(key) {
+  if (!confirm('حذف المشترك ' + key + '؟')) return;
+  await fetch('/api/subscribers/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pw, key }) });
+  loadSubs();
+}
+
+loadSubs();
+</script>
+</body>
+</html>
