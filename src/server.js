@@ -649,11 +649,34 @@ app.get('/api/poll/:username', (req, res) => {
 
 // ── REST API ─────────────────────────────────────────────
 app.post('/api/connect', async (req, res) => {
-  const { username, sessionid } = req.body;
+  const { username, sessionid, key: subKey } = req.body;
   if (!username) return res.json({ ok: false });
-  const key = username.toLowerCase().replace('@', '').trim();
-  connectRoom(key, sessionid || null);
-  res.json({ ok: true, username: key });
+  const tiktokUser = username.toLowerCase().replace('@', '').trim();
+
+  // If subscriber key provided, enforce single account
+  if (subKey) {
+    const sub = subscribers[subKey];
+    if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+      return res.json({ ok: false, error: 'مفتاح غير صالح' });
+    }
+    // Check if subscriber already has a different connected account
+    if (sub.tiktokUsername && sub.tiktokUsername !== tiktokUser) {
+      // Disconnect old account first
+      const oldRoom = rooms[sub.tiktokUsername];
+      if (oldRoom) {
+        if (oldRoom.retryTimer) clearTimeout(oldRoom.retryTimer);
+        if (oldRoom.tiktok) { try { oldRoom.tiktok.disconnect(); } catch(_) {} }
+        delete rooms[sub.tiktokUsername];
+        io.emit('room:status', { username: sub.tiktokUsername, status: 'removed' });
+      }
+    }
+    // Save tiktok username to subscriber
+    sub.tiktokUsername = tiktokUser;
+    saveSubscribers(subscribers);
+  }
+
+  connectRoom(tiktokUser, sessionid || null);
+  res.json({ ok: true, username: tiktokUser });
 });
 
 app.post('/api/disconnect', (req, res) => {
@@ -667,7 +690,21 @@ app.post('/api/disconnect', (req, res) => {
 });
 
 app.get('/api/rooms', (req, res) => {
-  res.json(Object.entries(rooms).map(([username, room]) => ({ username, status: room.status, stats: room.stats, msgCount: room.messages.length })));
+  const subKey = req.query.key || '';
+  const pw = req.query.pw || '';
+  // Owner sees all rooms
+  if (pw === OWNER_PASSWORD) {
+    return res.json(Object.entries(rooms).map(([username, room]) => ({ username, status: room.status, stats: room.stats, msgCount: room.messages.length })));
+  }
+  // Subscriber sees only their room
+  if (subKey) {
+    const sub = subscribers[subKey];
+    if (sub && sub.tiktokUsername && rooms[sub.tiktokUsername]) {
+      const room = rooms[sub.tiktokUsername];
+      return res.json([{ username: sub.tiktokUsername, status: room.status, stats: room.stats, msgCount: room.messages.length }]);
+    }
+  }
+  res.json([]);
 });
 
 // ── Socket.IO ────────────────────────────────────────────
