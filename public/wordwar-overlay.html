@@ -6,144 +6,202 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+:root{--scale:1}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',sans-serif;overflow:hidden}
-#container{display:none;position:fixed;top:20px;left:50%;transform:translateX(-50%);min-width:420px}
-.scoreboard{display:flex;gap:0;border-radius:20px;overflow:hidden;border:2px solid rgba(255,255,255,.15)}
-.team{flex:1;padding:14px 24px;text-align:center}
-.team-red{background:rgba(239,68,68,.85)}
-.team-blue{background:rgba(59,130,246,.85)}
-.team-label{font-size:13px;font-weight:700;color:rgba(255,255,255,.8)}
-.team-score{font-size:36px;font-weight:900;color:#fff}
-.vs{background:rgba(0,0,0,.9);color:#ffd700;font-weight:900;font-size:16px;display:flex;align-items:center;padding:0 12px}
-.category-bar{text-align:center;margin-top:10px;background:rgba(0,0,0,.85);border-radius:12px;padding:8px 20px;color:#ffd700;font-size:16px;font-weight:700}
-.timer-bar{text-align:center;margin-top:6px;background:rgba(0,0,0,.7);border-radius:8px;padding:4px 12px;font-size:14px;font-weight:900;color:#25f4ee}
-.keywords-bar{display:flex;gap:8px;margin-top:8px;justify-content:center}
-.kw{padding:4px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#fff}
-.kw-red{background:rgba(239,68,68,.7)}
-.kw-blue{background:rgba(59,130,246,.7)}
-
-/* Word feed */
-.word-feed{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;max-width:500px}
-.word-item{padding:6px 16px;border-radius:10px;font-size:14px;font-weight:700;color:#fff;animation:wordSlide .4s ease;white-space:nowrap}
-.word-item.red{background:rgba(239,68,68,.8)}
-.word-item.blue{background:rgba(59,130,246,.8)}
-@keyframes wordSlide{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-
-/* Join popup */
-.join-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:12px 28px;border-radius:14px;font-size:16px;font-weight:900;color:#fff;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
-.join-popup.show{opacity:1;animation:popIn .3s ease}
-@keyframes popIn{from{transform:translate(-50%,-50%) scale(.8)}to{transform:translate(-50%,-50%) scale(1)}}
-
-/* End result */
-#end-popup{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .5s}
-#end-popup.show{opacity:1}
-.end-card{background:rgba(0,0,0,.92);border:3px solid #ffd700;border-radius:28px;padding:36px 48px;text-align:center}
-.end-title{font-size:28px;font-weight:900;color:#ffd700;margin-bottom:8px}
-.end-scores{font-size:18px;color:#fff;margin-top:8px}
-
+.main-box{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:calc(520px*var(--scale));background:rgba(15,15,20,.95);border:1px solid rgba(255,255,255,.08);border-radius:calc(24px*var(--scale));padding:calc(24px*var(--scale));box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.main-box.show{display:block;animation:boxIn .4s ease}
+@keyframes boxIn{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.game-title{text-align:center;font-size:calc(18px*var(--scale));font-weight:900;margin-bottom:calc(10px*var(--scale));color:#ffd700}
+.game-title .red{color:#ef4444}.game-title .blue{color:#3b82f6}
+.category-bar{text-align:center;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.25);border-radius:calc(10px*var(--scale));padding:calc(8px*var(--scale));font-size:calc(16px*var(--scale));font-weight:900;color:#ffd700;margin-bottom:calc(12px*var(--scale))}
+.join-keywords{text-align:center;font-size:calc(12px*var(--scale));color:rgba(255,255,255,.5);margin-bottom:calc(10px*var(--scale))}
+.scoreboard{display:flex;gap:calc(8px*var(--scale));margin-bottom:calc(8px*var(--scale))}
+.team-score{flex:1;border-radius:calc(14px*var(--scale));padding:calc(12px*var(--scale));text-align:center}
+.team-score.red{background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.3)}
+.team-score.blue{background:rgba(59,130,246,.12);border:2px solid rgba(59,130,246,.3)}
+.team-label{font-size:calc(12px*var(--scale));font-weight:700;margin-bottom:calc(4px*var(--scale))}
+.team-score.red .team-label{color:#ef4444}
+.team-score.blue .team-label{color:#3b82f6}
+.team-num{font-size:calc(32px*var(--scale));font-weight:900;color:#fff}
+.score-vs{display:flex;align-items:center;font-size:calc(14px*var(--scale));font-weight:900;color:rgba(255,255,255,.3)}
+.score-bar-wrap{height:calc(6px*var(--scale));border-radius:3px;display:flex;overflow:hidden;margin-bottom:calc(12px*var(--scale));background:rgba(255,255,255,.05)}
+.score-bar-red{background:#ef4444;height:100%;transition:width .3s}
+.score-bar-blue{background:#3b82f6;height:100%;transition:width .3s}
+.words-area{display:flex;gap:calc(8px*var(--scale));margin-bottom:calc(12px*var(--scale));min-height:calc(80px*var(--scale))}
+.words-col{flex:1;border-radius:calc(12px*var(--scale));padding:calc(10px*var(--scale));display:flex;flex-wrap:wrap;gap:calc(4px*var(--scale));align-content:flex-start;max-height:calc(120px*var(--scale));overflow-y:auto}
+.words-col.red{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)}
+.words-col.blue{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15)}
+.word-chip{padding:calc(3px*var(--scale)) calc(8px*var(--scale));border-radius:calc(6px*var(--scale));font-size:calc(11px*var(--scale));font-weight:700;animation:chipPop .3s ease;white-space:nowrap}
+.words-col.red .word-chip{background:rgba(239,68,68,.15);color:#fca5a5}
+.words-col.blue .word-chip{background:rgba(59,130,246,.15);color:#93c5fd}
+@keyframes chipPop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+.timer-row{display:flex;justify-content:center}
+.timer-circle{position:relative;width:calc(60px*var(--scale));height:calc(60px*var(--scale))}
+.timer-circle svg{width:100%;height:100%;transform:rotate(-90deg)}
+.timer-bg{fill:none;stroke:rgba(255,255,255,.08);stroke-width:6}
+.timer-fg{fill:none;stroke:#ffd700;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .2s linear}
+.timer-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(18px*var(--scale));font-weight:900;color:#fff}
+.result-banner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:calc(24px*var(--scale));opacity:0;pointer-events:none;transition:opacity .4s}
+.result-banner.show{opacity:1}
+.result-banner.red-win{background:rgba(239,68,68,.92)}
+.result-banner.blue-win{background:rgba(59,130,246,.92)}
+.result-banner.tie{background:rgba(60,60,60,.92)}
+.result-text{font-size:calc(28px*var(--scale));font-weight:900;color:#fff}
+.result-sub{font-size:calc(14px*var(--scale));color:rgba(255,255,255,.7);margin-top:calc(4px*var(--scale))}
+#join-popup{position:fixed;top:calc(20px*var(--scale));left:50%;transform:translateX(-50%);padding:calc(10px*var(--scale)) calc(24px*var(--scale));border-radius:calc(12px*var(--scale));font-size:calc(14px*var(--scale));font-weight:700;color:#fff;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none;white-space:nowrap}
+#join-popup.show{opacity:1;animation:joinPop .3s ease}
+@keyframes joinPop{from{transform:translateX(-50%) scale(.8)}to{transform:translateX(-50%) scale(1)}}
 .confetti-piece{position:fixed;width:10px;height:10px;border-radius:2px;animation:confettiFall linear forwards;pointer-events:none;z-index:300}
-@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}
+@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}
 </style>
 </head>
 <body>
-<div id="container">
+<div class="main-box" id="box">
+  <div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
+  <div class="category-bar" id="category">—</div>
+  <div class="join-keywords" id="join-keywords"></div>
   <div class="scoreboard">
-    <div class="team team-red"><div class="team-label" id="red-label">🔴 أحمر (0)</div><div class="team-score" id="red">0</div></div>
-    <div class="vs">VS</div>
-    <div class="team team-blue"><div class="team-label" id="blue-label">🔵 أزرق (0)</div><div class="team-score" id="blue">0</div></div>
+    <div class="team-score red">
+      <div class="team-label" id="red-label">🔴 الفريق الأحمر</div>
+      <div class="team-num" id="red-score">0</div>
+    </div>
+    <div class="score-vs">VS</div>
+    <div class="team-score blue">
+      <div class="team-label" id="blue-label">🔵 الفريق الأزرق</div>
+      <div class="team-num" id="blue-score">0</div>
+    </div>
   </div>
-  <div class="category-bar" id="category-bar" style="display:none"></div>
-  <div class="timer-bar" id="timer-bar" style="display:none"></div>
-  <div class="keywords-bar" id="keywords-bar" style="display:none">
-    <span class="kw kw-red" id="kw-red">أحمر</span>
-    <span style="color:rgba(255,255,255,.4);font-size:11px">اكتب في الشات للانضمام</span>
-    <span class="kw kw-blue" id="kw-blue">أزرق</span>
+  <div class="score-bar-wrap">
+    <div class="score-bar-red" id="bar-red" style="width:50%"></div>
+    <div class="score-bar-blue" id="bar-blue" style="width:50%"></div>
+  </div>
+  <div class="words-area">
+    <div class="words-col red" id="red-words"></div>
+    <div class="words-col blue" id="blue-words"></div>
+  </div>
+  <div class="timer-row" id="timer-row">
+    <div class="timer-circle">
+      <svg viewBox="0 0 100 100">
+        <circle class="timer-bg" cx="50" cy="50" r="42"></circle>
+        <circle class="timer-fg" id="timer-fg" cx="50" cy="50" r="42" stroke-dasharray="263.89" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="timer-text" id="timer-text">60</div>
+    </div>
+  </div>
+  <div class="result-banner" id="result-banner">
+    <div class="result-text" id="result-text"></div>
+    <div class="result-sub" id="result-sub"></div>
   </div>
 </div>
-<div class="word-feed" id="word-feed"></div>
-<div id="join-popup" class="join-popup"></div>
-<div id="end-popup"><div class="end-card"><div class="end-title" id="end-title"></div><div class="end-scores" id="end-scores"></div></div></div>
-
+<div id="join-popup"></div>
 <script>
 const params=new URLSearchParams(location.search);
 let username=params.get('username')||'';
 const authKey=params.get('key')||'';
-const socket=io();
-let timerInt=null,endTime=0,totalTime=60;
+const socket=io({transports:['websocket','polling'],reconnection:true});
+const CIRCLE=263.89;
+let timerInt=null,endTime=0,totalDuration=60;
 
-if(!username&&authKey){fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{if(d.ok&&d.username){username=d.username;socket.emit('join',{username});load();}else if(d.ok&&d.connectedRooms?.length){username=d.connectedRooms[0];socket.emit('join',{username});load();}});}
+if(!username&&authKey){fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{if(d.ok&&d.username){username=d.username;}else if(d.ok&&d.connectedRooms?.length){username=d.connectedRooms[0];}if(username){socket.emit('join',{username});load();}});}
 else if(username){socket.emit('join',{username});load();}
 
-function load(){fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{if(d.active){show();updateScores(d);document.getElementById('category-bar').textContent=d.category;document.getElementById('category-bar').style.display='block';endTime=d.endTime;totalTime=d.duration;startTimer();}});}
+function load(){fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{if(d.active){show();updateScores(d.redScore,d.blueScore);document.getElementById('category').textContent=d.category;document.getElementById('join-keywords').innerHTML='🔴 اكتب \''+esc(d.redKeyword)+'\' – 🔵 اكتب \''+esc(d.blueKeyword)+'\'';document.getElementById('join-keywords').style.display='block';document.getElementById('red-label').textContent='🔴 الفريق الأحمر ('+d.redCount+')';document.getElementById('blue-label').textContent='🔵 الفريق الأزرق ('+d.blueCount+')';const remainMs=Math.max(0,d.endTime-Date.now());totalDuration=d.duration;startTimer(Math.ceil(remainMs/1000),d.duration);
+// Load existing words
+if(d.redWords)d.redWords.forEach(w=>addChip('red',w));
+if(d.blueWords)d.blueWords.forEach(w=>addChip('blue',w));
+}});}
 
-function show(){document.getElementById('container').style.display='block';}
+function show(){document.getElementById('box').classList.add('show');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-socket.on('wordwar:start',d=>{
-  show();
-  document.getElementById('red').textContent='0';document.getElementById('blue').textContent='0';
-  document.getElementById('category-bar').textContent=d.category;document.getElementById('category-bar').style.display='block';
-  document.getElementById('timer-bar').style.display='block';
-  document.getElementById('kw-red').textContent=d.redKeyword||'أحمر';
-  document.getElementById('kw-blue').textContent=d.blueKeyword||'أزرق';
-  document.getElementById('keywords-bar').style.display='flex';
-  document.getElementById('red-label').textContent='🔴 أحمر ('+d.redCount+')';
-  document.getElementById('blue-label').textContent='🔵 أزرق ('+d.blueCount+')';
-  endTime=Date.now()+d.duration*1000;totalTime=d.duration;startTimer();
-  document.getElementById('word-feed').innerHTML='';
-});
+function updateScores(r,b){
+  document.getElementById('red-score').textContent=r;
+  document.getElementById('blue-score').textContent=b;
+  const total=r+b||1;
+  document.getElementById('bar-red').style.width=(r/total*100)+'%';
+  document.getElementById('bar-blue').style.width=(b/total*100)+'%';
+}
 
-socket.on('wordwar:join',d=>{
-  document.getElementById('red-label').textContent='🔴 أحمر ('+d.redCount+')';
-  document.getElementById('blue-label').textContent='🔵 أزرق ('+d.blueCount+')';
-  showJoin(d.team,d.player);
-});
-
-socket.on('wordwar:word',d=>{
-  document.getElementById('red').textContent=d.redScore;document.getElementById('blue').textContent=d.blueScore;
-  addWordFeed(d.team,d.player,d.word);
-});
-
-socket.on('wordwar:lock',d=>{
-  if(d.locked){document.getElementById('keywords-bar').style.display='none';}
-  else{document.getElementById('keywords-bar').style.display='flex';}
-});
-
-socket.on('wordwar:end',d=>{
+function startTimer(remainSec,total){
   if(timerInt)clearInterval(timerInt);
-  document.getElementById('timer-bar').style.display='none';
-  const w=d.winner==='red'?'🔴 الأحمر يفوز!':d.winner==='blue'?'🔵 الأزرق يفوز!':'🤝 تعادل!';
-  document.getElementById('end-title').textContent='⚔️ '+w;
-  document.getElementById('end-scores').textContent='🔴 '+d.redScore+' — '+d.blueScore+' 🔵';
-  document.getElementById('end-popup').classList.add('show');
-  launchConfetti();
-  setTimeout(()=>{document.getElementById('end-popup').classList.remove('show');},6000);
-});
+  totalDuration=total||totalDuration;
+  endTime=Date.now()+remainSec*1000;
+  updateTimerDisplay();
+  timerInt=setInterval(updateTimerDisplay,100);
+}
 
-function updateScores(d){document.getElementById('red').textContent=d.redScore;document.getElementById('blue').textContent=d.blueScore;document.getElementById('red-label').textContent='🔴 أحمر ('+d.redCount+')';document.getElementById('blue-label').textContent='🔵 أزرق ('+d.blueCount+')';}
+function updateTimerDisplay(){
+  const remain=Math.max(0,(endTime-Date.now())/1000);
+  const sec=Math.ceil(remain);
+  document.getElementById('timer-text').textContent=sec;
+  const pct=remain/totalDuration;
+  document.getElementById('timer-fg').setAttribute('stroke-dashoffset',CIRCLE*(1-pct));
+  if(remain<=10)document.getElementById('timer-fg').setAttribute('stroke','#ef4444');
+  else document.getElementById('timer-fg').setAttribute('stroke','#ffd700');
+  if(remain<=0&&timerInt)clearInterval(timerInt);
+}
 
-function startTimer(){if(timerInt)clearInterval(timerInt);updateTimer();timerInt=setInterval(updateTimer,200);}
-function updateTimer(){const remain=Math.max(0,endTime-Date.now());const sec=Math.ceil(remain/1000);document.getElementById('timer-bar').textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');if(remain<=0&&timerInt)clearInterval(timerInt);}
+function addChip(team,word){
+  const col=document.getElementById(team+'-words');
+  const chip=document.createElement('span');
+  chip.className='word-chip';
+  chip.textContent=word;
+  col.prepend(chip);
+  while(col.children.length>20)col.removeChild(col.lastChild);
+}
 
 function showJoin(team,name){
   const p=document.getElementById('join-popup');
   p.style.background=team==='red'?'rgba(239,68,68,.9)':'rgba(59,130,246,.9)';
   p.textContent=(team==='red'?'🔴':'🔵')+' '+name+' انضم!';
-  p.className='join-popup show';
-  setTimeout(()=>p.classList.remove('show'),2000);
+  p.className='show';
+  setTimeout(()=>p.className='',2000);
 }
 
-function addWordFeed(team,player,word){
-  const feed=document.getElementById('word-feed');
-  const el=document.createElement('div');
-  el.className='word-item '+team;
-  el.textContent=player+': '+word;
-  feed.appendChild(el);
-  if(feed.children.length>8)feed.removeChild(feed.firstChild);
-  setTimeout(()=>{if(el.parentNode)el.remove();},5000);
-}
+function launchConfetti(){const colors=['#ff0050','#25f4ee','#ffd700','#1dba72','#a57afa','#f59e0b'];for(let i=0;i<60;i++){const el=document.createElement('div');el.className='confetti-piece';el.style.cssText=`left:${Math.random()*100}vw;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*.5}s`;document.body.appendChild(el);setTimeout(()=>el.remove(),4000);}}
 
-function launchConfetti(){const colors=['#ff0050','#25f4ee','#ffd700','#1dba72','#a57afa','#f59e0b'];for(let i=0;i<60;i++){const el=document.createElement('div');el.className='confetti-piece';el.style.cssText=`left:${Math.random()*100}vw;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*.5}s;`;document.body.appendChild(el);setTimeout(()=>el.remove(),4000);}}
+// Socket events
+socket.on('wordwar:start',d=>{
+  show();
+  document.getElementById('red-score').textContent='0';document.getElementById('blue-score').textContent='0';
+  document.getElementById('red-words').innerHTML='';document.getElementById('blue-words').innerHTML='';
+  document.getElementById('result-banner').className='result-banner';
+  document.getElementById('bar-red').style.width='50%';document.getElementById('bar-blue').style.width='50%';
+  document.getElementById('category').textContent=d.category;
+  document.getElementById('join-keywords').innerHTML='🔴 اكتب \''+esc(d.redKeyword)+'\' – 🔵 اكتب \''+esc(d.blueKeyword)+'\'';
+  document.getElementById('join-keywords').style.display='block';
+  document.getElementById('red-label').textContent='🔴 الفريق الأحمر ('+d.redCount+')';
+  document.getElementById('blue-label').textContent='🔵 الفريق الأزرق ('+d.blueCount+')';
+  totalDuration=d.duration;
+  startTimer(d.duration,d.duration);
+});
+
+socket.on('wordwar:join',d=>{
+  document.getElementById('red-label').textContent='🔴 الفريق الأحمر ('+d.redCount+')';
+  document.getElementById('blue-label').textContent='🔵 الفريق الأزرق ('+d.blueCount+')';
+  showJoin(d.team,d.player);
+});
+
+socket.on('wordwar:word',d=>{
+  updateScores(d.redScore,d.blueScore);
+  addChip(d.team,d.word);
+});
+
+socket.on('wordwar:lock',d=>{
+  document.getElementById('join-keywords').style.display=d.locked?'none':'block';
+});
+
+socket.on('wordwar:end',d=>{
+  if(timerInt)clearInterval(timerInt);
+  const banner=document.getElementById('result-banner');
+  const cls=d.winner==='red'?'red-win':d.winner==='blue'?'blue-win':'tie';
+  banner.className='result-banner show '+cls;
+  document.getElementById('result-text').textContent=d.winner==='red'?'🔴 الأحمر يفوز!':d.winner==='blue'?'🔵 الأزرق يفوز!':'🤝 تعادل!';
+  document.getElementById('result-sub').textContent='🔴 '+d.redScore+' — '+d.blueScore+' 🔵';
+  launchConfetti();
+  setTimeout(()=>banner.className='result-banner',8000);
+});
 </script>
 </body>
 </html>
