@@ -58,6 +58,13 @@
   .back{text-align:center;margin-top:16px}
   .back a{color:var(--muted);font-size:13px;text-decoration:none}
   .back a:hover{color:var(--accent2)}
+  @media(max-width:500px){
+    body{padding:20px 12px}
+    .card{padding:20px 16px}
+    h1{font-size:22px}
+    .tabs{flex-direction:column;gap:6px}
+    .tab{padding:10px}
+  }
 </style>
 </head>
 <body>
@@ -201,5 +208,6 @@ Moyasar.init({
   },
 });
 </script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06)">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>
 </html>

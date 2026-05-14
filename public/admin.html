@@ -57,6 +57,47 @@
   .link-row .link-copy { background:var(--accent2); color:#000; border:none; font-family:inherit; font-size:11px; font-weight:700; padding:6px 14px; border-radius:8px; cursor:pointer; flex-shrink:0; transition:all .15s; }
   .link-row .link-copy:hover { opacity:.85; }
   .link-row .link-copy.copied { background:var(--green); color:#fff; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  /* Guide */
+  .guide-section { margin-bottom:20px; }
+  .guide-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 18px; cursor:pointer; font-family:inherit; color:var(--text); font-size:15px; font-weight:700; }
+  .guide-toggle:hover { border-color:rgba(255,255,255,.15); }
+  .guide-toggle .arrow { transition:transform .2s; font-size:12px; color:var(--muted); }
+  .guide-toggle.open .arrow { transform:rotate(180deg); }
+  .guide-body { display:none; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 14px 14px; padding:0 18px 18px; }
+  .guide-toggle.open { border-radius:14px 14px 0 0; }
+  .guide-body.open { display:block; }
+  .guide-step { padding:14px 0; border-bottom:1px solid var(--border); }
+  .guide-step:last-child { border-bottom:none; }
+  .guide-step-num { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:900; margin-left:10px; flex-shrink:0; }
+  .guide-step-title { font-size:14px; font-weight:700; color:var(--text); display:inline; }
+  .guide-step-desc { font-size:12px; color:rgba(255,255,255,.5); margin-top:6px; line-height:1.9; padding-right:36px; }
+  .guide-game { display:flex; align-items:flex-start; gap:10px; padding:10px 0; }
+  .guide-game-icon { font-size:22px; flex-shrink:0; margin-top:2px; }
+  .guide-game-info { flex:1; }
+  .guide-game-name { font-size:13px; font-weight:700; color:var(--accent2); }
+  .guide-game-desc { font-size:11px; color:rgba(255,255,255,.45); margin-top:2px; line-height:1.7; }
+  .guide-divider { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin:14px 0 8px; padding-top:8px; border-top:1px solid var(--border); }
+  @media(max-width:500px){
+    body{padding:16px 10px}
+    h1{font-size:17px}
+    .add-box{flex-direction:column;gap:8px;margin-bottom:16px}
+    .add-box input{font-size:14px;padding:10px 12px}
+    .btn{width:100%;text-align:center;padding:12px}
+    .room-header{flex-direction:column;align-items:flex-start;gap:8px}
+    .room-top-actions{align-self:stretch}
+    .top-btn{flex:1;text-align:center}
+    .games-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+    .game-icon{font-size:20px}
+    .game-name{font-size:9px}
+    .room-stats{flex-wrap:wrap;gap:8px}
+    .link-row{flex-direction:column;align-items:stretch;gap:6px}
+    .link-row .link-copy{width:100%;text-align:center;padding:8px}
+    .guide-step-desc{padding-right:0}
+    .guide-game{flex-direction:column;gap:4px}
+    .guide-toggle{font-size:14px;padding:12px 14px}
+    .keywords-row{flex-direction:column}
+  }
 </style>
 </head>
 <body>
@@ -69,6 +110,92 @@
     </div>
   </div>
   <p class="subtitle" id="subtitle">حساب واحد فقط لكل مشترك</p>
+
+  <!-- Guide Section -->
+  <div class="guide-section">
+    <button class="guide-toggle" id="guide-toggle" onclick="toggleGuide()">
+      <span>📖 دليل الاستخدام والفعاليات</span>
+      <span class="arrow">▼</span>
+    </button>
+    <div class="guide-body" id="guide-body">
+
+      <div class="guide-step">
+        <span class="guide-step-num">1</span>
+        <span class="guide-step-title">اتصل بحسابك</span>
+        <div class="guide-step-desc">اكتب يوزرنيم تيك توك حقك في الحقل بالأسفل (بدون @) واضغط "اتصل". السيرفر يتصل ببثك تلقائي وتظهر لك الإحصائيات.</div>
+      </div>
+
+      <div class="guide-step">
+        <span class="guide-step-num">2</span>
+        <span class="guide-step-title">أضف الـ Overlay في OBS</span>
+        <div class="guide-step-desc">بعد الاتصال، انسخ رابط الأوفرلي من قسم "🔗 روابطك الجاهزة" بالأسفل. في OBS أو StreamLabs: أضف مصدر جديد ← Browser Source ← الصق الرابط ← العرض 1920 والارتفاع 1080. الرابط ثابت ومربوط بمفتاحك — ما تحتاج تغيره كل مرة.</div>
+      </div>
+
+      <div class="guide-step">
+        <span class="guide-step-num">3</span>
+        <span class="guide-step-title">شغّل الفعاليات</span>
+        <div class="guide-step-desc">اضغط على أي فعالية من الأزرار تحت حسابك المتصل. كل فعالية تفتح في صفحة تحكم خاصة فيها — من هناك تقدر تبدأ وتوقف وتتحكم بكل شي.</div>
+      </div>
+
+      <div class="guide-step">
+        <span class="guide-step-num">4</span>
+        <span class="guide-step-title">ابدأ البث!</span>
+        <div class="guide-step-desc">افتح بثك على تيك توك بشكل عادي. السيرفر يقرأ الشات تلقائي والمشاهدين يتفاعلون مع الفعاليات مباشرة — كل شي real-time!</div>
+      </div>
+
+      <div class="guide-divider">🎮 شرح الفعاليات</div>
+
+      <div class="guide-game">
+        <div class="guide-game-icon">🎰</div>
+        <div class="guide-game-info">
+          <div class="guide-game-name">عجلة الحظ</div>
+          <div class="guide-game-desc">حدد كلمة مفتاحية (مثل "اشترك") — المشاهد يكتبها في الشات عشان ينضم. بعدين دوّر العجلة وتختار فائز عشوائي. تقدر تضيف أسماء يدوي أو تخلي الشات يسجلهم تلقائي.</div>
+        </div>
+      </div>
+
+      <div class="guide-game">
+        <div class="guide-game-icon">🔐</div>
+        <div class="guide-game-info">
+          <div class="guide-game-name">كلمة السر</div>
+          <div class="guide-game-desc">اكتب كلمة سرية — الحرف الأول والأخير يظهرون تلقائي والباقي مخفي. اضغط "اكشف حرف" عشان تكشف حروف واحد واحد. المشاهدين يحاولون يخمنون الكلمة في الشات — أول واحد يكتبها صح يفوز!</div>
+        </div>
+      </div>
+
+      <div class="guide-game">
+        <div class="guide-game-icon">⚔️</div>
+        <div class="guide-game-info">
+          <div class="guide-game-name">حرب الكلمات</div>
+          <div class="guide-game-desc">حدد كلمة دخول لكل فريق (مثل "أحمر" و"أزرق") — المشاهد يكتبها في الشات عشان ينضم لفريقه. بعدين اختر فئة (مثل فواكه أو حيوانات) وابدأ الجولة. اللاعبين يكتبون كلمات تنتمي للفئة — كل كلمة صحيحة غير مكررة = نقطة لفريقك. ينتهي الوقت والفريق اللي عنده نقاط أكثر يفوز!</div>
+        </div>
+      </div>
+
+      <div class="guide-game">
+        <div class="guide-game-icon">❓</div>
+        <div class="guide-game-info">
+          <div class="guide-game-name">سؤال وجواب</div>
+          <div class="guide-game-desc">اكتب سؤال وخيارات (2-4 خيارات) وحدد الإجابة الصحيحة والوقت. المشاهدين يجاوبون بالرقم في الشات (مثل 1 أو 2). أول واحد يجاوب صح يفوز! النتائج والنسب تظهر تلقائي.</div>
+        </div>
+      </div>
+
+      <div class="guide-game">
+        <div class="guide-game-icon">🎯</div>
+        <div class="guide-game-info">
+          <div class="guide-game-name">التصويت</div>
+          <div class="guide-game-desc">اطرح سؤال بدون إجابة صحيحة (مثل "وش أحسن فريق؟") مع خيارات (2-6). المشاهدين يصوتون بالرقم — كل شخص صوت واحد. النتائج تتحدث لحظياً بأعمدة ملونة!</div>
+        </div>
+      </div>
+
+      <div class="guide-divider">💡 نصائح</div>
+
+      <div class="guide-step-desc" style="padding-right:0;padding-bottom:4px">
+        • <strong style="color:var(--text)">الأوفرلي شفاف</strong> — حطه فوق بثك وما يغطي شي<br>
+        • <strong style="color:var(--text)">الاتصال مستمر</strong> — لو انقطع يعيد الاتصال تلقائي كل 5 ثواني<br>
+        • <strong style="color:var(--text)">الروابط ثابتة</strong> — ما تحتاج تغيرها كل بث<br>
+        • <strong style="color:var(--text)">ابدأ البث أول</strong> — السيرفر يتصل ببثك لما يكون شغال<br>
+        • <strong style="color:var(--text)">sessionid اختياري</strong> — استخدمه بس لو واجهت مشاكل بالاتصال
+      </div>
+    </div>
+  </div>
 
   <!-- Connect box: single account -->
   <div id="connect-section">
@@ -92,6 +219,15 @@
       انسخ الرابط وحطه كـ <strong style="color:var(--text)">Browser Source</strong> في OBS — الرابط ثابت ومربوط بمفتاحك، ما يحتاج تغيره
     </div>
     <div id="links-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+
+  <!-- Support -->
+  <div class="card" style="margin-top:20px;text-align:center">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px">🛟 تحتاج مساعدة؟</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <a href="https://wa.me/966552608556" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;font-family:inherit">💬 واتساب</a>
+      <a href="https://t.me/mxo_22" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#0088cc;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;font-family:inherit">✈️ تليجرام</a>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -239,6 +375,13 @@ function render() {
 document.getElementById('username-input').addEventListener('keydown', e => { if (e.key === 'Enter') addRoom(); });
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 
+function toggleGuide() {
+  const toggle = document.getElementById('guide-toggle');
+  const body = document.getElementById('guide-body');
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
 // ── My Links ──
 function loadMyLinks() {
   if (!userKey) return;
@@ -279,5 +422,6 @@ function copyLink(idx, url) {
 
 if (userKey) loadMyLinks();
 </script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06)">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>
 </html>

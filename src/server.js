@@ -186,7 +186,7 @@ function requireAuth(req, res, next) {
 }
 
 // Redirect root to landing page
-app.get('/', (req, res) => res.redirect('/subscribe.html'));
+// index.html served automatically by express.static
 
 // Protected pages
 app.get('/wheel.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wheel.html')));
@@ -535,7 +535,20 @@ app.post('/api/wordwar/stop', (req, res) => {
 app.get('/api/wordwar/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const ww = getWordWar(key);
-  res.json({ active: ww.active, category: ww.category, duration: ww.duration, endTime: ww.endTime, registrationLocked: ww.registrationLocked, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
+  // Build word->player mapping from team members
+  const redWordsDetailed = [];
+  const blueWordsDetailed = [];
+  for (const [uid, member] of ww.redTeam) {
+    for (const w of (member.words || [])) {
+      redWordsDetailed.push({ word: w, player: member.name });
+    }
+  }
+  for (const [uid, member] of ww.blueTeam) {
+    for (const w of (member.words || [])) {
+      blueWordsDetailed.push({ word: w, player: member.name });
+    }
+  }
+  res.json({ active: ww.active, category: ww.category, duration: ww.duration, endTime: ww.endTime, registrationLocked: ww.registrationLocked, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords), redWordsDetailed, blueWordsDetailed });
 });
 
 // ══════════════════════════════════════════════════════════

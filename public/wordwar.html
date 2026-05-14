@@ -73,6 +73,27 @@ label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
 .timer-display{text-align:center;font-size:32px;font-weight:900;color:var(--accent2);padding:8px}
 .category-display{text-align:center;font-size:18px;font-weight:700;color:var(--amber);padding:8px;background:rgba(245,158,11,.08);border-radius:10px;margin-bottom:8px}
 .overlay-link{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:12px;color:var(--accent2);word-break:break-all;cursor:pointer}
+@media(max-width:500px){
+body{min-height:auto}
+header{padding:12px 14px}
+.container{padding:14px 10px;gap:10px}
+.card{padding:14px}
+.how-box{font-size:12px;padding:10px 12px}
+.keywords-row{flex-direction:column;gap:8px}
+.keyword-box input{font-size:14px}
+.scoreboard{flex-direction:column;gap:8px}
+.team-card{padding:12px}
+.team-score{font-size:28px}
+.cats-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+.cat-btn{padding:10px 6px}
+.cat-icon{font-size:20px}
+.cat-name{font-size:11px}
+.cat-count{font-size:9px}
+.answers-columns{flex-direction:column;gap:8px}
+.timer-display{font-size:26px}
+.btns-row{flex-direction:column;gap:6px}
+.field label{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -118,7 +139,7 @@ label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
     </div>
   </div>
 
-  <div class="card answers-card" id="answers-card" style="display:none">
+  <div class="card answers-card" id="answers-card">
     <div class="answers-title">📝 الإجابات <span class="count" id="answers-count">0 كلمة</span></div>
     <div class="answers-columns">
       <div class="answers-col red">
@@ -205,7 +226,6 @@ socket.on('wordwar:lock',d=>{registrationLocked=d.locked;updateLockBtn();});
 function copyLink(){navigator.clipboard.writeText(document.getElementById('overlay-link').textContent);document.getElementById('overlay-link').style.color='#1dba72';setTimeout(()=>document.getElementById('overlay-link').style.color='',1500);}
 
 function renderAnswers(){
-  document.getElementById('answers-card').style.display='block';
   const total=redWordsList.length+blueWordsList.length;
   document.getElementById('answers-count').textContent=total+' كلمة';
   const rList=document.getElementById('red-answers');
@@ -216,7 +236,13 @@ function renderAnswers(){
   else bList.innerHTML=blueWordsList.map((w,i)=>`<li><span>${i+1}. ${w.word}</span><span class="player-name">${w.player}</span></li>`).join('');
 }
 
-if(username)fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-members').textContent=d.redCount+' لاعب';document.getElementById('blue-members').textContent=d.blueCount+' لاعب';if(d.active){document.getElementById('live-card').style.display='block';document.getElementById('category-display').textContent=d.category;endTime=d.endTime;startTimer();}registrationLocked=d.registrationLocked;updateLockBtn();});
+if(username)fetch(`/api/wordwar/${username}`).then(r=>r.json()).then(d=>{document.getElementById('red-score').textContent=d.redScore;document.getElementById('blue-score').textContent=d.blueScore;document.getElementById('red-members').textContent=d.redCount+' لاعب';document.getElementById('blue-members').textContent=d.blueCount+' لاعب';if(d.active){document.getElementById('live-card').style.display='block';document.getElementById('category-display').textContent=d.category;endTime=d.endTime;startTimer();}registrationLocked=d.registrationLocked;updateLockBtn();
+  // Load existing answers
+  if(d.redWordsDetailed) redWordsList=d.redWordsDetailed;
+  if(d.blueWordsDetailed) blueWordsList=d.blueWordsDetailed;
+  renderAnswers();
+});
 </script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06)">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>
 </html>

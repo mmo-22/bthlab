@@ -46,7 +46,7 @@ async function init() {
       <div class="icon">❌</div>
       <div class="title error-title">فشل الدفع</div>
       <div class="desc">${params.get('message') || 'لم يتم إكمال عملية الدفع'}</div>
-      <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+      <a href="/" class="btn">حاول مرة أخرى</a>
     `;
     return;
   }
@@ -91,7 +91,7 @@ async function init() {
         <div class="icon">⚠️</div>
         <div class="title error-title">خطأ</div>
         <div class="desc">${data.error || 'حدث خطأ غير متوقع'}</div>
-        <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+        <a href="/" class="btn">حاول مرة أخرى</a>
       `;
     }
   } catch(e) {
@@ -100,7 +100,7 @@ async function init() {
       <div class="icon">⚠️</div>
       <div class="title error-title">خطأ في الاتصال</div>
       <div class="desc">تأكد من اتصالك بالإنترنت</div>
-      <a href="/subscribe.html" class="btn">حاول مرة أخرى</a>
+      <a href="/" class="btn">حاول مرة أخرى</a>
     `;
   }
 }
@@ -114,5 +114,6 @@ function copyKey() {
 
 init();
 </script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06)">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>
 </html>
