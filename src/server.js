@@ -57,8 +57,9 @@ app.get('/api/config', (req, res) => {
 });
 
 app.post('/api/subscribe', async (req, res) => {
-  const { paymentId, email, name } = req.body;
+  const { paymentId, email, name, tiktokUsername } = req.body;
   if (!paymentId) return res.json({ ok: false, error: 'معرف الدفع مطلوب' });
+  if (!tiktokUsername || !tiktokUsername.trim()) return res.json({ ok: false, error: 'يوزرنيم التيك توك مطلوب' });
   try {
     const payment = await verifyPayment(paymentId);
     if (payment.status !== 'paid') return res.json({ ok: false, error: 'الدفع لم يكتمل' });
@@ -68,9 +69,10 @@ app.post('/api/subscribe', async (req, res) => {
     const key = generateKey();
     const now = new Date();
     const expires = new Date(now); expires.setDate(expires.getDate() + 30);
-    subscribers[key] = { email: email||'', name: name||'', paymentId, createdAt: now.toISOString(), expiresAt: expires.toISOString(), active: true };
+    const cleanUsername = tiktokUsername.toLowerCase().replace('@', '').trim();
+    subscribers[key] = { email: email||'', name: name||'', tiktokUsername: cleanUsername, paymentId, createdAt: now.toISOString(), expiresAt: expires.toISOString(), active: true };
     saveSubscribers(subscribers);
-    console.log(`[Subscribe] New: ${key} (${email}) expires ${expires.toISOString()}`);
+    console.log(`[Subscribe] New: ${key} (${email}) @${cleanUsername} expires ${expires.toISOString()}`);
     res.json({ ok: true, key, expiresAt: expires.toISOString() });
   } catch(e) { console.error('[Subscribe] Error:', e); res.json({ ok: false, error: 'خطأ في التحقق' }); }
 });
@@ -116,6 +118,59 @@ app.post('/api/subscribers/extend', (req, res) => {
     saveSubscribers(subscribers);
     res.json({ ok: true, expiresAt: d.toISOString() });
   } else res.json({ ok: false });
+});
+
+// Owner: change subscriber's tiktok username
+app.post('/api/subscribers/change-username', (req, res) => {
+  if (req.body.pw !== OWNER_PASSWORD) return res.status(403).json({});
+  const sub = subscribers[req.body.key];
+  if (!sub) return res.json({ ok: false });
+  const newUsername = (req.body.username || '').toLowerCase().replace('@', '').trim();
+  if (!newUsername) return res.json({ ok: false, error: 'يوزرنيم مطلوب' });
+  // Disconnect old room if exists
+  if (sub.tiktokUsername && rooms[sub.tiktokUsername]) {
+    const oldRoom = rooms[sub.tiktokUsername];
+    if (oldRoom.retryTimer) clearTimeout(oldRoom.retryTimer);
+    if (oldRoom.tiktok) { try { oldRoom.tiktok.disconnect(); } catch(_) {} }
+    delete rooms[sub.tiktokUsername];
+    io.emit('room:status', { username: sub.tiktokUsername, status: 'removed' });
+  }
+  sub.tiktokUsername = newUsername;
+  saveSubscribers(subscribers);
+  res.json({ ok: true, username: newUsername });
+});
+
+// Contact support — sends to admin email
+const SUPPORT_EMAIL = 'Mxo2009@gmail.com';
+const supportMessages = [];
+app.post('/api/contact', (req, res) => {
+  const { name, email, subject, message, key } = req.body;
+  if (!message || !message.trim()) return res.json({ ok: false, error: 'اكتب رسالتك' });
+  const msg = {
+    id: Date.now(),
+    name: name || 'مجهول',
+    email: email || '',
+    subject: subject || 'بدون عنوان',
+    message: message.trim(),
+    key: key || '',
+    tiktokUsername: key && subscribers[key] ? subscribers[key].tiktokUsername : '',
+    createdAt: new Date().toISOString(),
+    read: false,
+  };
+  supportMessages.push(msg);
+  // Save to file
+  const msgFile = path.join(PERSIST_DIR, 'messages.json');
+  try { fs.writeFileSync(msgFile, JSON.stringify(supportMessages, null, 2), 'utf8'); } catch(e) {}
+  console.log(`[Support] New message from ${msg.name} (${msg.email}): ${msg.subject}`);
+  res.json({ ok: true });
+});
+
+// Owner: get support messages
+app.get('/api/messages', (req, res) => {
+  if (req.query.pw !== OWNER_PASSWORD) return res.status(403).json({});
+  const msgFile = path.join(PERSIST_DIR, 'messages.json');
+  try { if (fs.existsSync(msgFile)) return res.json(JSON.parse(fs.readFileSync(msgFile, 'utf8'))); } catch(e) {}
+  res.json([]);
 });
 
 app.post('/api/subscribers/add', (req, res) => {
@@ -666,26 +721,20 @@ app.post('/api/connect', async (req, res) => {
   if (!username) return res.json({ ok: false });
   const tiktokUser = username.toLowerCase().replace('@', '').trim();
 
-  // If subscriber key provided, enforce single account
+  // If subscriber key provided, enforce assigned username
   if (subKey) {
     const sub = subscribers[subKey];
     if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
       return res.json({ ok: false, error: 'مفتاح غير صالح' });
     }
-    // Check if subscriber already has a different connected account
+    // Subscriber can ONLY connect to their assigned username
     if (sub.tiktokUsername && sub.tiktokUsername !== tiktokUser) {
-      // Disconnect old account first
-      const oldRoom = rooms[sub.tiktokUsername];
-      if (oldRoom) {
-        if (oldRoom.retryTimer) clearTimeout(oldRoom.retryTimer);
-        if (oldRoom.tiktok) { try { oldRoom.tiktok.disconnect(); } catch(_) {} }
-        delete rooms[sub.tiktokUsername];
-        io.emit('room:status', { username: sub.tiktokUsername, status: 'removed' });
-      }
+      return res.json({ ok: false, error: 'لا يمكنك تغيير اليوزرنيم. تواصل مع الدعم لتغييره.' });
     }
-    // Save tiktok username to subscriber
-    sub.tiktokUsername = tiktokUser;
-    saveSubscribers(subscribers);
+    if (!sub.tiktokUsername) {
+      sub.tiktokUsername = tiktokUser;
+      saveSubscribers(subscribers);
+    }
   }
 
   connectRoom(tiktokUser, sessionid || null);

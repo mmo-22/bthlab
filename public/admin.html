@@ -221,12 +221,23 @@
     <div id="links-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 
-  <!-- Support -->
-  <div class="card" style="margin-top:20px;text-align:center">
-    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px">🛟 تحتاج مساعدة؟</div>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <a href="https://wa.me/966552608556" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;font-family:inherit">💬 واتساب</a>
-      <a href="https://t.me/mxo_22" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#0088cc;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;font-family:inherit">✈️ تليجرام</a>
+  <!-- Support Form -->
+  <div class="card" style="margin-top:20px">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px">🛟 تواصل مع الدعم</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">لتغيير اليوزرنيم أو أي استفسار — أرسل لنا رسالة وبنرد عليك بأسرع وقت</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <input type="text" id="contact-name" placeholder="اسمك" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:10px 14px;border-radius:8px;outline:none">
+      <input type="email" id="contact-email" placeholder="إيميلك (اختياري)" dir="ltr" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:10px 14px;border-radius:8px;outline:none">
+      <select id="contact-subject" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;appearance:none">
+        <option value="تغيير اليوزرنيم">تغيير اليوزرنيم</option>
+        <option value="مشكلة تقنية">مشكلة تقنية</option>
+        <option value="استفسار عام">استفسار عام</option>
+        <option value="اقتراح">اقتراح</option>
+        <option value="أخرى">أخرى</option>
+      </select>
+      <textarea id="contact-message" placeholder="اكتب رسالتك هنا..." rows="3" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;resize:vertical"></textarea>
+      <button onclick="sendContact()" style="background:var(--accent2);color:#000;border:none;font-family:inherit;font-size:14px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer">📩 إرسال</button>
+      <div id="contact-msg" style="text-align:center;font-size:12px;display:none"></div>
     </div>
   </div>
 </div>
@@ -280,9 +291,18 @@ if (userKey && mode !== 'owner') {
   fetch('/api/resolve-key?key=' + encodeURIComponent(userKey)).then(r=>r.json()).then(d => {
     if (d.ok && d.username) {
       myUsername = d.username;
-      document.getElementById('username-input').value = d.username;
-      document.getElementById('username-input').disabled = true;
-      document.getElementById('username-input').style.opacity = '.5';
+      const input = document.getElementById('username-input');
+      input.value = d.username;
+      input.disabled = true;
+      input.style.opacity = '.5';
+      // Hide session input and change button text to just "اتصل"
+      document.getElementById('connect-btn').textContent = '▶ اتصل';
+      document.getElementById('connect-btn').onclick = addRoom;
+      // Add locked notice
+      const notice = document.createElement('div');
+      notice.style.cssText = 'font-size:11px;color:var(--muted);text-align:center;margin-top:4px';
+      notice.textContent = '🔒 لتغيير اليوزرنيم تواصل مع الدعم من الأسفل';
+      document.getElementById('connect-section').appendChild(notice);
     }
   });
 }
@@ -301,24 +321,19 @@ async function addRoom() {
   const username = input.value.trim().replace('@','');
   if (!username) return;
 
-  // For subscriber: enforce single account
-  if (mode !== 'owner' && myUsername && myUsername !== username) {
-    if (!confirm('عندك حساب متصل (' + myUsername + '). هل تبي تقطعه وتتصل بـ ' + username + '؟')) return;
-  }
-
   const body = { username, sessionid: sessionInput.value.trim() };
   if (userKey) body.key = userKey;
 
   const res = await apiFetch('/api/connect', { method:'POST', body: JSON.stringify(body) });
   const data = await res.json();
   if (data.ok) {
-    // Remove old room from display if switching
-    if (myUsername && myUsername !== data.username) delete roomsData[myUsername];
     myUsername = data.username;
     roomsData[data.username] = { username: data.username, status:'connecting', stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
     updateConnectUI();
     render();
     showToast('جاري الاتصال بـ @' + data.username + '...');
+  } else if (data.error) {
+    showToast(data.error);
   }
 }
 
@@ -334,21 +349,15 @@ async function removeRoom(username) {
 function updateConnectUI() {
   const input = document.getElementById('username-input');
   const btn = document.getElementById('connect-btn');
-  if (myUsername && roomsData[myUsername]) {
-    // Account connected — lock input
+  if (mode !== 'owner' && myUsername) {
+    // Subscriber with assigned username - lock it
     input.value = myUsername;
     input.disabled = true;
     input.style.opacity = '.5';
-    btn.textContent = '🔄 تغيير';
-    btn.onclick = () => {
-      input.disabled = false;
-      input.style.opacity = '1';
-      input.value = '';
-      input.focus();
-      btn.textContent = '+ اتصل';
-      btn.onclick = addRoom;
-    };
-  } else {
+    btn.textContent = '▶ اتصل';
+    btn.onclick = addRoom;
+  } else if (mode === 'owner') {
+    // Owner can connect any username
     input.disabled = false;
     input.style.opacity = '1';
     btn.textContent = '+ اتصل';
@@ -421,6 +430,24 @@ function copyLink(idx, url) {
 }
 
 if (userKey) loadMyLinks();
+
+async function sendContact() {
+  const name = document.getElementById('contact-name').value.trim();
+  const email = document.getElementById('contact-email').value.trim();
+  const subject = document.getElementById('contact-subject').value;
+  const message = document.getElementById('contact-message').value.trim();
+  const msgEl = document.getElementById('contact-msg');
+  if (!message) { msgEl.style.display='block'; msgEl.style.color='var(--red)'; msgEl.textContent='اكتب رسالتك أول'; return; }
+  const res = await fetch('/api/contact', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, email, subject, message, key: userKey }) });
+  const data = await res.json();
+  if (data.ok) {
+    msgEl.style.display='block'; msgEl.style.color='var(--green)'; msgEl.textContent='✅ تم إرسال رسالتك بنجاح! بنرد عليك بأسرع وقت';
+    document.getElementById('contact-message').value='';
+    document.getElementById('contact-name').value='';
+  } else {
+    msgEl.style.display='block'; msgEl.style.color='var(--red)'; msgEl.textContent=data.error || 'حصل خطأ';
+  }
+}
 </script>
 <div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06);width:100%">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>
