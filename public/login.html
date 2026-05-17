@@ -88,6 +88,16 @@
       </div>
       <button class="btn btn-sub" onclick="loginSub()">🔓 دخول</button>
       <div class="msg" id="sub-msg"></div>
+      <div style="text-align:center;margin-top:12px">
+        <a href="#" onclick="showForgot();return false" style="color:var(--muted);font-size:12px;text-decoration:none">نسيت المفتاح؟</a>
+      </div>
+      <div id="forgot-section" style="display:none;margin-top:12px;padding:14px;background:var(--surface2);border-radius:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🔑 استرجاع المفتاح</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">ادخل الإيميل اللي سجلت فيه وبنرسل لك المفتاح</div>
+        <input type="email" id="forgot-email" placeholder="email@example.com" dir="ltr" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;padding:10px;border-radius:8px;outline:none;margin-bottom:8px">
+        <button onclick="recoverKey()" style="width:100%;background:var(--accent2);color:#000;border:none;font-family:inherit;font-size:13px;font-weight:700;padding:10px;border-radius:8px;cursor:pointer">📩 أرسل المفتاح</button>
+        <div class="msg" id="forgot-msg" style="margin-top:8px"></div>
+      </div>
     </div>
 
     <!-- Tab: New subscription -->
@@ -148,11 +158,24 @@ function switchTab(t) {
 const savedKey = localStorage.getItem('subscription_key');
 if (savedKey) document.getElementById('sub-key').value = savedKey;
 
+// Generate unique device ID (persists in localStorage)
+function getDeviceId() {
+  let id = localStorage.getItem('bthlab_device_id');
+  if (!id) {
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    id = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('bthlab_device_id', id);
+  }
+  return id;
+}
+
 async function loginSub() {
   const key = document.getElementById('sub-key').value.trim();
   const msg = document.getElementById('sub-msg');
   if (!key) { msg.className = 'msg error'; msg.textContent = 'أدخل مفتاح الاشتراك'; return; }
-  const res = await fetch('/api/validate-key?key=' + encodeURIComponent(key));
+  const deviceId = getDeviceId();
+  const res = await fetch('/api/validate-key?key=' + encodeURIComponent(key) + '&deviceId=' + encodeURIComponent(deviceId));
   const data = await res.json();
   if (data.valid) {
     localStorage.setItem('subscription_key', key);
@@ -161,6 +184,8 @@ async function loginSub() {
     setTimeout(() => { window.location.href = '/admin.html?mode=subscriber&key=' + encodeURIComponent(key); }, 800);
   } else if (data.expired) {
     msg.className = 'msg error'; msg.textContent = 'انتهى اشتراكك — جدد من تبويب "اشتراك جديد"';
+  } else if (data.error) {
+    msg.className = 'msg error'; msg.textContent = data.error;
   } else {
     msg.className = 'msg error'; msg.textContent = 'مفتاح غير صالح';
   }
@@ -183,6 +208,24 @@ async function loginOwner() {
 
 document.getElementById('sub-key').addEventListener('keydown', e => { if(e.key==='Enter') loginSub(); });
 document.getElementById('owner-pw').addEventListener('keydown', e => { if(e.key==='Enter') loginOwner(); });
+
+function showForgot() {
+  const sec = document.getElementById('forgot-section');
+  sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+}
+
+async function recoverKey() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const msg = document.getElementById('forgot-msg');
+  if (!email) { msg.className = 'msg error'; msg.textContent = 'ادخل إيميلك'; return; }
+  const res = await fetch('/api/recover-key', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email }) });
+  const data = await res.json();
+  if (data.ok) {
+    msg.className = 'msg success'; msg.textContent = '✅ تم إرسال المفتاح على إيميلك';
+  } else {
+    msg.className = 'msg error'; msg.textContent = data.error || 'ما لقينا اشتراك بهذا الإيميل';
+  }
+}
 
 function toggleTheme() {
   document.body.classList.toggle('light');

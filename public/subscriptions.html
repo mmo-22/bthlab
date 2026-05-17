@@ -111,6 +111,7 @@ function renderSubs(list) {
           <button onclick="toggleSub('${s.key}')">${s.active ? '⏸ تعطيل' : '▶ تفعيل'}</button>
           <button onclick="extendSub('${s.key}')">+30 يوم</button>
           <button onclick="changeUsername('${s.key}','${esc(s.tiktokUsername||'')}')">✏️ يوزر</button>
+          <button onclick="unbindDevice('${s.key}')" title="فك ربط الجهاز"${s.deviceId ? '' : ' disabled style="opacity:.3"'}>📱 فك</button>
           <button class="del" onclick="deleteSub('${s.key}')">🗑️</button>
         </div>
       </div>`;
@@ -149,6 +150,12 @@ async function extendSub(key) {
 async function deleteSub(key) {
   if (!confirm('حذف المشترك ' + key + '؟')) return;
   await fetch('/api/subscribers/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pw, key }) });
+  loadSubs();
+}
+
+async function unbindDevice(key) {
+  if (!confirm('فك ربط الجهاز لهذا المشترك؟ بيقدر يسجل دخول من أي جهاز جديد.')) return;
+  await fetch('/api/subscribers/unbind-device', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pw, key }) });
   loadSubs();
 }
 

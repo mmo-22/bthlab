@@ -5,6 +5,8 @@ const { WebcastPushConnection } = require('tiktok-live-connector');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
 
 const app = express();
 const httpServer = createServer(app);
@@ -16,6 +18,30 @@ const io = new Server(httpServer, {
 });
 
 app.use(express.json({ limit: '2mb' }));
+
+// ══════════════════════════════════════════════════════════
+// ── Email Setup ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'Mxo2009@gmail.com';
+
+let mailTransporter = null;
+if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+  mailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+  });
+  mailTransporter.verify().then(() => console.log('[Email] Ready')).catch(e => console.error('[Email] Error:', e.message));
+}
+
+async function sendEmail(to, subject, html) {
+  if (!mailTransporter) { console.log('[Email] Not configured — skipping'); return; }
+  try {
+    await mailTransporter.sendMail({ from: `"BthLab" <${GMAIL_USER}>`, to, subject, html });
+    console.log(`[Email] Sent to ${to}: ${subject}`);
+  } catch(e) { console.error('[Email] Failed:', e.message); }
+}
 
 // ══════════════════════════════════════════════════════════
 // ── Config ───────────────────────────────────────────────
@@ -78,16 +104,56 @@ app.post('/api/subscribe', async (req, res) => {
 });
 
 app.get('/api/validate-key', (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (!checkRateLimit(ip)) return res.status(429).json({ valid: false, error: 'محاولات كثيرة. حاول بعد 15 دقيقة' });
   const key = req.query.key;
+  const deviceId = req.query.deviceId || '';
   if (!key) return res.json({ valid: false });
   const sub = subscribers[key];
   if (!sub || !sub.active) return res.json({ valid: false });
   if (new Date(sub.expiresAt) < new Date()) { sub.active = false; saveSubscribers(subscribers); return res.json({ valid: false, expired: true }); }
+
+  // Device binding
+  if (!deviceId) return res.json({ valid: false, error: 'معرّف الجهاز مطلوب' });
+  if (!sub.deviceId) {
+    // First login — bind device
+    sub.deviceId = deviceId;
+    saveSubscribers(subscribers);
+    console.log(`[Auth] Device bound for ${key}: ${deviceId.substring(0, 8)}...`);
+  } else if (sub.deviceId !== deviceId) {
+    // Different device — reject
+    console.log(`[Auth] Device mismatch for ${key}: expected ${sub.deviceId.substring(0, 8)} got ${deviceId.substring(0, 8)}`);
+    return res.json({ valid: false, error: 'هذا المفتاح مربوط بجهاز ثاني. تواصل مع الدعم لنقله.' });
+  }
+
   res.json({ valid: true, expiresAt: sub.expiresAt, name: sub.name });
 });
 
 app.post('/api/validate-owner', (req, res) => {
   res.json({ valid: req.body.password === OWNER_PASSWORD });
+});
+
+// Recover key by email
+app.post('/api/recover-key', (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (!checkRateLimit(ip)) return res.status(429).json({ ok: false, error: 'محاولات كثيرة. حاول بعد 15 دقيقة' });
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!email) return res.json({ ok: false, error: 'ادخل إيميلك' });
+  const found = Object.entries(subscribers).find(([k, v]) => (v.email || '').toLowerCase() === email && v.active);
+  if (!found) return res.json({ ok: false, error: 'ما لقينا اشتراك نشط بهذا الإيميل' });
+  const [key, sub] = found;
+  sendEmail(email, '[BthLab] مفتاح اشتراكك',
+    `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px;text-align:center">
+      <h2 style="color:#25f4ee">🔑 مفتاح اشتراكك</h2>
+      <p style="font-size:14px">مرحباً ${sub.name || ''},</p>
+      <div style="margin:20px 0;padding:16px;background:#f5f5f5;border-radius:12px;font-family:monospace;font-size:20px;font-weight:bold;letter-spacing:2px">${key}</div>
+      <p style="font-size:12px;color:#888">ادخل هذا المفتاح في صفحة تسجيل الدخول</p>
+      <p style="font-size:12px;color:#888">ينتهي اشتراكك: ${new Date(sub.expiresAt).toLocaleDateString('ar-SA')}</p>
+      <p style="font-size:10px;color:#aaa;margin-top:20px">⚠️ لا تشارك هذا المفتاح مع أحد</p>
+    </div>`
+  );
+  console.log(`[Recover] Key sent to ${email}`);
+  res.json({ ok: true });
 });
 
 app.get('/api/subscribers', (req, res) => {
@@ -120,6 +186,17 @@ app.post('/api/subscribers/extend', (req, res) => {
   } else res.json({ ok: false });
 });
 
+// Owner: unbind device from subscriber
+app.post('/api/subscribers/unbind-device', (req, res) => {
+  if (req.body.pw !== OWNER_PASSWORD) return res.status(403).json({});
+  const sub = subscribers[req.body.key];
+  if (!sub) return res.json({ ok: false });
+  delete sub.deviceId;
+  saveSubscribers(subscribers);
+  console.log(`[Auth] Device unbound for ${req.body.key}`);
+  res.json({ ok: true });
+});
+
 // Owner: change subscriber's tiktok username
 app.post('/api/subscribers/change-username', (req, res) => {
   if (req.body.pw !== OWNER_PASSWORD) return res.status(403).json({});
@@ -141,7 +218,6 @@ app.post('/api/subscribers/change-username', (req, res) => {
 });
 
 // Contact support — sends to admin email
-const SUPPORT_EMAIL = 'Mxo2009@gmail.com';
 const supportMessages = [];
 app.post('/api/contact', (req, res) => {
   const { name, email, subject, message, key } = req.body;
@@ -162,6 +238,20 @@ app.post('/api/contact', (req, res) => {
   const msgFile = path.join(PERSIST_DIR, 'messages.json');
   try { fs.writeFileSync(msgFile, JSON.stringify(supportMessages, null, 2), 'utf8'); } catch(e) {}
   console.log(`[Support] New message from ${msg.name} (${msg.email}): ${msg.subject}`);
+  // Send email notification
+  sendEmail(SUPPORT_EMAIL, `[BthLab Support] ${msg.subject}`,
+    `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px">
+      <h2 style="color:#25f4ee">📩 رسالة جديدة من الدعم</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr><td style="padding:8px;font-weight:bold;color:#888">الاسم:</td><td style="padding:8px">${msg.name}</td></tr>
+        <tr><td style="padding:8px;font-weight:bold;color:#888">الإيميل:</td><td style="padding:8px">${msg.email || '—'}</td></tr>
+        <tr><td style="padding:8px;font-weight:bold;color:#888">المفتاح:</td><td style="padding:8px;font-family:monospace">${msg.key || '—'}</td></tr>
+        <tr><td style="padding:8px;font-weight:bold;color:#888">التيك توك:</td><td style="padding:8px">@${msg.tiktokUsername || '—'}</td></tr>
+        <tr><td style="padding:8px;font-weight:bold;color:#888">الموضوع:</td><td style="padding:8px;color:#25f4ee">${msg.subject}</td></tr>
+      </table>
+      <div style="background:#f5f5f5;border-radius:10px;padding:16px;margin-top:12px;font-size:14px;line-height:1.8">${msg.message}</div>
+    </div>`
+  );
   res.json({ ok: true });
 });
 
@@ -790,6 +880,72 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+// ══════════════════════════════════════════════════════════
+// ── Subscription Expiry Alerts (daily at 9 AM) ──────────
+// ══════════════════════════════════════════════════════════
+cron.schedule('0 9 * * *', () => {
+  const now = new Date();
+  const threeDays = new Date(now); threeDays.setDate(threeDays.getDate() + 3);
+  const oneDay = new Date(now); oneDay.setDate(oneDay.getDate() + 1);
+
+  Object.entries(subscribers).forEach(([key, sub]) => {
+    if (!sub.active || !sub.email) return;
+    const expires = new Date(sub.expiresAt);
+    const daysLeft = Math.ceil((expires - now) / (1000 * 60 * 60 * 24));
+
+    // Alert subscriber
+    if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
+      const urgency = daysLeft === 0 ? '⚠️ اشتراكك ينتهي اليوم!' : daysLeft === 1 ? '⏰ باقي يوم واحد على انتهاء اشتراكك' : '📅 باقي 3 أيام على انتهاء اشتراكك';
+      sendEmail(sub.email, `[BthLab] ${urgency}`,
+        `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px;text-align:center">
+          <h2 style="color:#ffd700">${urgency}</h2>
+          <p style="font-size:14px;color:#666">مرحباً ${sub.name || ''},</p>
+          <p style="font-size:14px">اشتراكك في <strong>BthLab</strong> ينتهي بتاريخ <strong>${expires.toLocaleDateString('ar-SA')}</strong></p>
+          <p style="font-size:14px">لتجديد اشتراكك تواصل مع الدعم من صفحة الأدمن</p>
+          <div style="margin-top:16px;padding:12px;background:#f5f5f5;border-radius:10px;font-family:monospace">${key}</div>
+          <p style="font-size:11px;color:#aaa;margin-top:16px">BthLab — مختبر البث</p>
+        </div>`
+      );
+      console.log(`[Cron] Expiry alert sent to ${sub.email} (${daysLeft} days left)`);
+    }
+
+    // Alert owner
+    if (daysLeft === 1) {
+      sendEmail(SUPPORT_EMAIL, `[BthLab] اشتراك ${sub.name || key} ينتهي غداً`,
+        `<div dir="rtl" style="font-family:Tahoma,sans-serif;padding:20px">
+          <h3>اشتراك ينتهي غداً</h3>
+          <p>الاسم: ${sub.name || '—'} | الإيميل: ${sub.email} | المفتاح: ${key} | التيك توك: @${sub.tiktokUsername || '—'}</p>
+        </div>`
+      );
+    }
+  });
+}, { timezone: 'Asia/Riyadh' });
+
+// ══════════════════════════════════════════════════════════
+// ── Security: Rate Limiting for Key Validation ──────────
+// ══════════════════════════════════════════════════════════
+const loginAttempts = {};
+const RATE_LIMIT_MAX = 5; // max attempts per 15 min
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  if (!loginAttempts[ip]) loginAttempts[ip] = [];
+  loginAttempts[ip] = loginAttempts[ip].filter(t => now - t < RATE_LIMIT_WINDOW);
+  if (loginAttempts[ip].length >= RATE_LIMIT_MAX) return false;
+  loginAttempts[ip].push(now);
+  return true;
+}
+
+// Clean up rate limit data every hour
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(loginAttempts).forEach(ip => {
+    loginAttempts[ip] = loginAttempts[ip].filter(t => now - t < RATE_LIMIT_WINDOW);
+    if (!loginAttempts[ip].length) delete loginAttempts[ip];
+  });
+}, 60 * 60 * 1000);
+
 httpServer.listen(PORT, () => console.log(`\n🎯 BthLab running at http://localhost:${PORT}\n`));
 
 setInterval(() => {
