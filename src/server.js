@@ -5,7 +5,6 @@ const { WebcastPushConnection } = require('tiktok-live-connector');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 
 const app = express();
@@ -20,26 +19,23 @@ const io = new Server(httpServer, {
 app.use(express.json({ limit: '2mb' }));
 
 // ══════════════════════════════════════════════════════════
-// ── Email Setup ──────────────────────────────────────────
+// ── Email Setup (Resend) ─────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const GMAIL_USER = process.env.GMAIL_USER || '';
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'Mxo2009@gmail.com';
-
-let mailTransporter = null;
-if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-  mailTransporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-  });
-  mailTransporter.verify().then(() => console.log('[Email] Ready')).catch(e => console.error('[Email] Error:', e.message));
-}
+const FROM_EMAIL = process.env.FROM_EMAIL || 'BthLab <noreply@bthlab.live>';
 
 async function sendEmail(to, subject, html) {
-  if (!mailTransporter) { console.log('[Email] Not configured — skipping'); return; }
+  if (!RESEND_API_KEY) { console.log('[Email] No API key — skipping'); return; }
   try {
-    await mailTransporter.sendMail({ from: `"BthLab" <${GMAIL_USER}>`, to, subject, html });
-    console.log(`[Email] Sent to ${to}: ${subject}`);
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
+    });
+    const data = await res.json();
+    if (data.id) console.log(`[Email] Sent to ${to}: ${subject}`);
+    else console.error('[Email] Error:', JSON.stringify(data));
   } catch(e) { console.error('[Email] Failed:', e.message); }
 }
 
