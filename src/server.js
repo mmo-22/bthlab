@@ -5,7 +5,6 @@ const { WebcastPushConnection } = require('tiktok-live-connector');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
-const cron = require('node-cron');
 
 const app = express();
 const httpServer = createServer(app);
@@ -877,20 +876,26 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 // ══════════════════════════════════════════════════════════
-// ── Subscription Expiry Alerts (daily at 9 AM) ──────────
+// ── Subscription Expiry Alerts (check every hour) ───────
 // ══════════════════════════════════════════════════════════
-cron.schedule('0 9 * * *', () => {
+const alertedToday = new Set();
+setInterval(() => {
   const now = new Date();
-  const threeDays = new Date(now); threeDays.setDate(threeDays.getDate() + 3);
-  const oneDay = new Date(now); oneDay.setDate(oneDay.getDate() + 1);
+  const hour = now.getHours();
+  const dateKey = now.toISOString().split('T')[0];
+  // Only run at 9 AM Riyadh time (UTC+3 = 6 AM UTC)
+  if (hour !== 6) return;
 
   Object.entries(subscribers).forEach(([key, sub]) => {
     if (!sub.active || !sub.email) return;
+    const alertId = `${key}-${dateKey}`;
+    if (alertedToday.has(alertId)) return;
+
     const expires = new Date(sub.expiresAt);
     const daysLeft = Math.ceil((expires - now) / (1000 * 60 * 60 * 24));
 
-    // Alert subscriber
     if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
+      alertedToday.add(alertId);
       const urgency = daysLeft === 0 ? '⚠️ اشتراكك ينتهي اليوم!' : daysLeft === 1 ? '⏰ باقي يوم واحد على انتهاء اشتراكك' : '📅 باقي 3 أيام على انتهاء اشتراكك';
       sendEmail(sub.email, `[BthLab] ${urgency}`,
         `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px;text-align:center">
@@ -902,20 +907,17 @@ cron.schedule('0 9 * * *', () => {
           <p style="font-size:11px;color:#aaa;margin-top:16px">BthLab — مختبر البث</p>
         </div>`
       );
-      console.log(`[Cron] Expiry alert sent to ${sub.email} (${daysLeft} days left)`);
-    }
-
-    // Alert owner
-    if (daysLeft === 1) {
-      sendEmail(SUPPORT_EMAIL, `[BthLab] اشتراك ${sub.name || key} ينتهي غداً`,
-        `<div dir="rtl" style="font-family:Tahoma,sans-serif;padding:20px">
-          <h3>اشتراك ينتهي غداً</h3>
-          <p>الاسم: ${sub.name || '—'} | الإيميل: ${sub.email} | المفتاح: ${key} | التيك توك: @${sub.tiktokUsername || '—'}</p>
-        </div>`
-      );
+      if (daysLeft === 1) {
+        sendEmail(SUPPORT_EMAIL, `[BthLab] اشتراك ${sub.name || key} ينتهي غداً`,
+          `<div dir="rtl" style="font-family:Tahoma,sans-serif;padding:20px">
+            <h3>اشتراك ينتهي غداً</h3>
+            <p>الاسم: ${sub.name || '—'} | الإيميل: ${sub.email} | المفتاح: ${key} | التيك توك: @${sub.tiktokUsername || '—'}</p>
+          </div>`
+        );
+      }
     }
   });
-}, { timezone: 'Asia/Riyadh' });
+}, 60 * 60 * 1000); // Check every hour
 
 // ══════════════════════════════════════════════════════════
 // ── Security: Rate Limiting for Key Validation ──────────
