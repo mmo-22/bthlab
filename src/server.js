@@ -416,39 +416,34 @@ async function connectRoom(username, sessionid = null) {
       }
     }
 
-    // Word War check — join teams + category words
-    const ww = getWordWar(key);
-    if (ww.active && data.comment) {
+    // Check Word War game (حرب الكلمات)
+    const wwGame = getWordWarGame(key);
+    if (data.comment && (wwGame.active || wwGame.registrationOpen)) {
       const word = data.comment.trim().toLowerCase().replace(/\s+/g,'');
       const uid = data.userId || data.uniqueId;
-      const name = data.nickname || data.uniqueId;
-      const avatar = data.profilePictureUrl || null;
 
-      // Team registration
-      if (word === ww.redKeyword && !ww.blueTeam.has(uid) && !ww.redTeam.has(uid) && !ww.registrationLocked) {
-        ww.redTeam.set(uid, { name, avatar, words: [] });
-        broadcast(key, 'wordwar:join', { team: 'red', player: name, avatar, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
-      } else if (word === ww.blueKeyword && !ww.redTeam.has(uid) && !ww.blueTeam.has(uid) && !ww.registrationLocked) {
-        ww.blueTeam.set(uid, { name, avatar, words: [] });
-        broadcast(key, 'wordwar:join', { team: 'blue', player: name, avatar, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
+      if (!wwGame.registrationLocked && (word === wwGame.redKeyword || word === wwGame.blueKeyword) && !wwGame.redTeam.has(uid) && !wwGame.blueTeam.has(uid)) {
+        const team = word === wwGame.redKeyword ? 'red' : 'blue';
+        const teamMap = team === 'red' ? wwGame.redTeam : wwGame.blueTeam;
+        teamMap.set(uid, { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, words: [] });
+        broadcast(key, 'word-war:join', { team, player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, redCount: wwGame.redTeam.size, blueCount: wwGame.blueTeam.size });
       }
-      // Check if player is in a team and word is valid
-      else {
+      else if (wwGame.active) {
         let team = null;
-        if (ww.redTeam.has(uid)) team = 'red';
-        else if (ww.blueTeam.has(uid)) team = 'blue';
-        if (team && word.length >= 2) {
-          const isValid = ww.validWords.length === 0 || ww.validWords.includes(word);
-          if (isValid) {
-            const teamWords = team === 'red' ? ww.redWords : ww.blueWords;
-            const oppositeWords = team === 'red' ? ww.blueWords : ww.redWords;
-            // Not already used by either team
+        if (wwGame.redTeam.has(uid)) team = 'red';
+        else if (wwGame.blueTeam.has(uid)) team = 'blue';
+        if (team) {
+          const isValid = wwGame.validWords.length === 0 || wwGame.validWords.includes(word);
+          if (isValid && word.length >= 2) {
+            const teamWords = team === 'red' ? wwGame.redWords : wwGame.blueWords;
+            const oppositeWords = team === 'red' ? wwGame.blueWords : wwGame.redWords;
+            const teamMap = team === 'red' ? wwGame.redTeam : wwGame.blueTeam;
             if (!teamWords.has(word) && !oppositeWords.has(word)) {
               teamWords.add(word);
-              if (team === 'red') ww.redScore++; else ww.blueScore++;
-              const member = (team === 'red' ? ww.redTeam : ww.blueTeam).get(uid);
-              if (member) member.words.push(word);
-              broadcast(key, 'wordwar:word', { team, player: name, word, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
+              const player = teamMap.get(uid);
+              if (player) player.words.push(word);
+              if (team === 'red') wwGame.redScore++; else wwGame.blueScore++;
+              broadcast(key, 'word-war:word', { team, word: data.comment.trim(), player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, redScore: wwGame.redScore, blueScore: wwGame.blueScore });
             }
           }
         }
@@ -597,98 +592,133 @@ app.get('/api/password/:username', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-// ── Word War (حرب الكلمات) ───────────────────────────────
+// ── Word War (حرب الكلمات) — from private project ────────
 // ══════════════════════════════════════════════════════════
-const wordWars = {};
-function getWordWar(key) {
-  if (!wordWars[key]) wordWars[key] = {
-    active: false, category: '', validWords: [], duration: 60,
-    endTime: 0, endTimer: null, registrationLocked: false,
-    redKeyword: 'أحمر', blueKeyword: 'أزرق',
+const wordWarGames = {};
+function getWordWarGame(key) {
+  if (!wordWarGames[key]) wordWarGames[key] = {
+    category: '', validWords: [], duration: 60,
+    active: false, endTime: 0, endTimer: null,
     redTeam: new Map(), blueTeam: new Map(),
     redWords: new Set(), blueWords: new Set(),
     redScore: 0, blueScore: 0,
+    roundHistory: [],
+    registrationLocked: false, registrationOpen: false,
+    redKeyword: 'أحمر', blueKeyword: 'أزرق',
   };
-  return wordWars[key];
+  return wordWarGames[key];
 }
 
-app.post('/api/wordwar/start', (req, res) => {
-  const key = req.body.username?.toLowerCase().replace('@','').trim();
-  if (!key) return res.json({ ok: false });
-  const ww = getWordWar(key);
-  if (ww.endTimer) clearTimeout(ww.endTimer);
+app.post('/api/word-war/start', (req, res) => {
+  const { username, category, validWords, duration, redKeyword, blueKeyword, resetTeams } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  if (!key || !category) return res.json({ ok: false });
+  const game = getWordWarGame(key);
+  if (game.endTimer) clearTimeout(game.endTimer);
+  game.category = category;
+  game.validWords = (validWords || []).map(w => w.trim().toLowerCase().replace(/\s+/g,''));
+  game.duration = Math.max(15, Math.min(120, parseInt(duration) || 60));
+  game.active = true;
+  game.endTime = Date.now() + game.duration * 1000;
+  if (resetTeams) { game.redTeam.clear(); game.blueTeam.clear(); game.redScore = 0; game.blueScore = 0; }
+  game.redWords.clear(); game.blueWords.clear();
+  for (const [uid, p] of game.redTeam) p.words = [];
+  for (const [uid, p] of game.blueTeam) p.words = [];
+  game.redKeyword = (redKeyword || 'أحمر').trim().toLowerCase().replace(/\s+/g,'');
+  game.blueKeyword = (blueKeyword || 'أزرق').trim().toLowerCase().replace(/\s+/g,'');
+  if (resetTeams) game.registrationLocked = false;
 
-  ww.category = req.body.category || '';
-  ww.validWords = (req.body.validWords || []).map(w => w.trim().toLowerCase().replace(/\s+/g,''));
-  ww.duration = Math.max(15, Math.min(300, parseInt(req.body.duration) || 60));
-  ww.redKeyword = (req.body.redKeyword || 'أحمر').trim().toLowerCase().replace(/\s+/g,'');
-  ww.blueKeyword = (req.body.blueKeyword || 'أزرق').trim().toLowerCase().replace(/\s+/g,'');
-  ww.active = true;
-  ww.endTime = Date.now() + ww.duration * 1000;
-  ww.registrationLocked = false;
-  ww.redWords.clear(); ww.blueWords.clear();
-  ww.redScore = 0; ww.blueScore = 0;
-  // Keep teams from previous round if not reset
-  if (req.body.resetTeams) { ww.redTeam.clear(); ww.blueTeam.clear(); }
+  broadcast(key, 'word-war:start', { category: game.category, duration: game.duration, redKeyword: redKeyword || 'أحمر', blueKeyword: blueKeyword || 'أزرق', redCount: game.redTeam.size, blueCount: game.blueTeam.size, redScore: game.redScore, blueScore: game.blueScore, resetTeams: !!resetTeams });
 
-  broadcast(key, 'wordwar:start', { category: ww.category, duration: ww.duration, endTime: ww.endTime, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size });
-
-  ww.endTimer = setTimeout(() => {
-    if (!ww.active) return;
-    ww.active = false;
-    const winner = ww.redScore > ww.blueScore ? 'red' : ww.blueScore > ww.redScore ? 'blue' : 'tie';
-    broadcast(key, 'wordwar:end', { winner, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
-  }, ww.duration * 1000);
-
+  game.endTimer = setTimeout(() => {
+    if (!game.active) return;
+    game.active = false;
+    const result = { category: game.category, redScore: game.redScore, blueScore: game.blueScore, winner: game.redScore > game.blueScore ? 'red' : game.blueScore > game.redScore ? 'blue' : 'tie', redWords: [...game.redWords], blueWords: [...game.blueWords] };
+    game.roundHistory.push(result);
+    broadcast(key, 'word-war:end', result);
+  }, game.duration * 1000);
   res.json({ ok: true });
 });
 
-app.post('/api/wordwar/lock', (req, res) => {
-  const key = req.body.username?.toLowerCase().replace('@','').trim();
-  if (!key) return res.json({ ok: false });
-  const ww = getWordWar(key);
-  ww.registrationLocked = req.body.locked !== false;
-  broadcast(key, 'wordwar:lock', { locked: ww.registrationLocked });
+app.post('/api/word-war/open-registration', (req, res) => {
+  const { username, redKeyword, blueKeyword } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  game.redKeyword = (redKeyword || 'أحمر').trim().toLowerCase().replace(/\s+/g,'');
+  game.blueKeyword = (blueKeyword || 'أزرق').trim().toLowerCase().replace(/\s+/g,'');
+  game.registrationLocked = false;
+  game.registrationOpen = true;
+  broadcast(key, 'word-war:registration', { open: true, redKeyword: redKeyword || 'أحمر', blueKeyword: blueKeyword || 'أزرق', redCount: game.redTeam.size, blueCount: game.blueTeam.size });
   res.json({ ok: true });
 });
 
-app.post('/api/wordwar/reset-teams', (req, res) => {
-  const key = req.body.username?.toLowerCase().replace('@','').trim();
-  if (!key) return res.json({ ok: false });
-  const ww = getWordWar(key);
-  ww.redTeam.clear(); ww.blueTeam.clear();
-  broadcast(key, 'wordwar:update', { redCount: 0, blueCount: 0, redScore: 0, blueScore: 0 });
+app.post('/api/word-war/lock', (req, res) => {
+  const { username, locked } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  game.registrationLocked = !!locked;
+  broadcast(key, 'word-war:lock', { locked: game.registrationLocked });
   res.json({ ok: true });
 });
 
-app.post('/api/wordwar/stop', (req, res) => {
-  const key = req.body.username?.toLowerCase().replace('@','').trim();
-  if (!key) return res.json({ ok: false });
-  const ww = getWordWar(key);
-  ww.active = false;
-  if (ww.endTimer) { clearTimeout(ww.endTimer); ww.endTimer = null; }
-  const winner = ww.redScore > ww.blueScore ? 'red' : ww.blueScore > ww.redScore ? 'blue' : 'tie';
-  broadcast(key, 'wordwar:end', { winner, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords) });
-  res.json({ ok: true, winner });
+app.post('/api/word-war/remove-player', (req, res) => {
+  const { username, team, playerName } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  const teamMap = team === 'red' ? game.redTeam : game.blueTeam;
+  for (const [uid, p] of teamMap) {
+    if (p.name === playerName) { teamMap.delete(uid); broadcast(key, 'word-war:player-removed', { team, playerName, redCount: game.redTeam.size, blueCount: game.blueTeam.size }); break; }
+  }
+  res.json({ ok: true });
 });
 
-app.get('/api/wordwar/:username', (req, res) => {
+app.post('/api/word-war/add-player', (req, res) => {
+  const { username, team, playerName } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  if (!key || !playerName) return res.json({ ok: false });
+  const game = getWordWarGame(key);
+  const teamMap = team === 'red' ? game.redTeam : game.blueTeam;
+  const uid = 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  teamMap.set(uid, { name: playerName.trim(), avatar: null, words: [] });
+  broadcast(key, 'word-war:join', { team, player: playerName.trim(), avatar: null, redCount: game.redTeam.size, blueCount: game.blueTeam.size });
+  res.json({ ok: true });
+});
+
+app.post('/api/word-war/clear-teams', (req, res) => {
+  const { username } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  game.redTeam.clear(); game.blueTeam.clear();
+  game.redWords.clear(); game.blueWords.clear();
+  game.redScore = 0; game.blueScore = 0;
+  broadcast(key, 'word-war:teams-cleared');
+  res.json({ ok: true });
+});
+
+app.post('/api/word-war/stop', (req, res) => {
+  const { username } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  if (game.endTimer) clearTimeout(game.endTimer);
+  game.active = false;
+  broadcast(key, 'word-war:stopped');
+  res.json({ ok: true });
+});
+
+app.post('/api/word-war/clear', (req, res) => {
+  const { username } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  const game = getWordWarGame(key);
+  game.roundHistory = [];
+  res.json({ ok: true });
+});
+
+app.get('/api/word-war/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
-  const ww = getWordWar(key);
-  // Build word->player mapping from team members
-  const redWordsDetailed = [];
-  const blueWordsDetailed = [];
-  for (const [uid, member] of ww.redTeam) {
-    for (const w of (member.words || [])) {
-      redWordsDetailed.push({ word: w, player: member.name });
-    }
-  }
-  for (const [uid, member] of ww.blueTeam) {
-    for (const w of (member.words || [])) {
-      blueWordsDetailed.push({ word: w, player: member.name });
-    }
-  }
-  res.json({ active: ww.active, category: ww.category, duration: ww.duration, endTime: ww.endTime, registrationLocked: ww.registrationLocked, redKeyword: ww.redKeyword, blueKeyword: ww.blueKeyword, redCount: ww.redTeam.size, blueCount: ww.blueTeam.size, redScore: ww.redScore, blueScore: ww.blueScore, redWords: Array.from(ww.redWords), blueWords: Array.from(ww.blueWords), redWordsDetailed, blueWordsDetailed });
+  const game = getWordWarGame(key);
+  const redPlayers = Array.from(game.redTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
+  const bluePlayers = Array.from(game.blueTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
+  res.json({ active: game.active, category: game.category, duration: game.duration, endTime: game.endTime, redScore: game.redScore, blueScore: game.blueScore, redWords: [...game.redWords], blueWords: [...game.blueWords], redPlayers, bluePlayers, roundHistory: game.roundHistory.slice(-10) });
 });
 
 // ══════════════════════════════════════════════════════════
