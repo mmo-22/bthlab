@@ -332,7 +332,7 @@ function requireAuth(req, res, next) {
 app.get('/wheel.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wheel.html')));
 app.get('/admin.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
 app.get('/password.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/password.html')));
-app.get('/wordwar.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/wordwar.html')));
+app.get('/word-war.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/word-war.html')));
 app.get('/quiz.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/quiz.html')));
 app.get('/poll.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/poll.html')));
 app.get('/subscriptions.html', (req, res) => {
