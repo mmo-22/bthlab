@@ -518,7 +518,7 @@ function getWheel(key) {
   return wheels[key];
 }
 
-app.post('/api/wheel/config', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); getWheel(key).keyword = req.body.keyword || 'اشتراك'; res.json({ ok: true, keyword: getWheel(key).keyword }); });
+app.post('/api/wheel/config', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (req.body.keyword) w.keyword = req.body.keyword; if (req.body.title) w.title = req.body.title; if (req.body.colors) w.colors = req.body.colors; if (req.body.textColor) w.textColor = req.body.textColor; if (req.body.pointerColor) w.pointerColor = req.body.pointerColor; if (req.body.spinDuration) w.spinDuration = req.body.spinDuration; io.to(`room:${key}`).emit('wheel:config', { keyword: w.keyword, title: w.title, colors: w.colors, textColor: w.textColor, pointerColor: w.pointerColor, spinDuration: w.spinDuration }); res.json({ ok: true }); });
 app.post('/api/wheel/clear', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.clear(); w.removedIds.clear(); io.to(`room:${key}`).emit('wheel:update', { entries: [], count: 0, fullSync: true }); res.json({ ok: true }); });
 app.post('/api/wheel/add', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key || !req.body.name) return res.json({ ok: false }); const w = getWheel(key); const userId = 'manual_' + Date.now(); const entry = { userId, name: req.body.name.trim(), avatar: null }; w.entries.set(userId, entry); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: entry }); res.json({ ok: true, entry }); });
 app.post('/api/wheel/start-registration', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.accepting = true; const dur = parseInt(req.body.duration) || 0; const endTime = dur > 0 ? Date.now() + dur * 1000 : 0; w.regEndTime = endTime; if (w.regTimer) clearTimeout(w.regTimer); if (dur > 0) { w.regTimer = setTimeout(() => { w.accepting = false; w.regEndTime = 0; io.to(`room:${key}`).emit('wheel:registration', { accepting: false, endTime: 0 }); }, dur * 1000); } io.to(`room:${key}`).emit('wheel:registration', { accepting: true, endTime, keyword: w.keyword || 'اشتراك', count: w.entries.size }); res.json({ ok: true }); });
@@ -610,7 +610,7 @@ function getWordWarGame(key) {
 }
 
 app.post('/api/word-war/start', (req, res) => {
-  const { username, category, validWords, duration, redKeyword, blueKeyword, resetTeams } = req.body;
+  const { username, category, validWords, duration, redKeyword, blueKeyword, resetTeams, redColor, blueColor } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   if (!key || !category) return res.json({ ok: false });
   const game = getWordWarGame(key);
@@ -626,9 +626,11 @@ app.post('/api/word-war/start', (req, res) => {
   for (const [uid, p] of game.blueTeam) p.words = [];
   game.redKeyword = (redKeyword || 'أحمر').trim().toLowerCase().replace(/\s+/g,'');
   game.blueKeyword = (blueKeyword || 'أزرق').trim().toLowerCase().replace(/\s+/g,'');
+  game.redColor = redColor || '#ef4444';
+  game.blueColor = blueColor || '#3b82f6';
   if (resetTeams) game.registrationLocked = false;
 
-  broadcast(key, 'word-war:start', { category: game.category, duration: game.duration, redKeyword: redKeyword || 'أحمر', blueKeyword: blueKeyword || 'أزرق', redCount: game.redTeam.size, blueCount: game.blueTeam.size, redScore: game.redScore, blueScore: game.blueScore, resetTeams: !!resetTeams });
+  broadcast(key, 'word-war:start', { category: game.category, duration: game.duration, redKeyword: redKeyword || 'أحمر', blueKeyword: blueKeyword || 'أزرق', redCount: game.redTeam.size, blueCount: game.blueTeam.size, redScore: game.redScore, blueScore: game.blueScore, resetTeams: !!resetTeams, redColor: game.redColor, blueColor: game.blueColor });
 
   game.endTimer = setTimeout(() => {
     if (!game.active) return;
@@ -901,7 +903,271 @@ io.on('connection', (socket) => {
     }
   });
   let key = null;
-  socket.on('disconnect', () => { if (key) socket.leave(`room:${key}`); });
+  socket.on('disconnect', () => {
+    if (key) socket.leave(`room:${key}`);
+
+    // Live rooms cleanup
+    const code = socket._liveRoomCode;
+    if (code) {
+      const lroom = liveRooms.get(code);
+      if (lroom) {
+        lroom.viewers.delete(socket.id);
+        io.to(`liveroom:${code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
+        if (socket._liveRoomName) {
+          io.to(`liveroom:${code}`).emit('room:activity', { type: 'leave', name: socket._liveRoomName });
+        }
+      }
+    }
+  });
+
+  // ─────────────────────────────────────────────────────
+  // LIVE ROOMS SOCKET HANDLERS
+  // ─────────────────────────────────────────────────────
+  socket.on('room:join', ({ code, name }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة أو انتهت' });
+    if (!name || !name.trim()) return socket.emit('room:error', { message: 'الاسم مطلوب' });
+    socket.rooms.forEach(r => { if (r.startsWith('liveroom:')) socket.leave(r); });
+    const viewerName = name.trim().substring(0, 30);
+    lroom.viewers.set(socket.id, { name: viewerName, joinedAt: Date.now() });
+    socket.join(`liveroom:${lroom.code}`);
+    socket._liveRoomCode = lroom.code;
+    socket._liveRoomName = viewerName;
+    socket.emit('room:joined', {
+      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size,
+      chatHistory: lroom.chat.slice(-30),
+      poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
+      wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
+      quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
+    });
+    io.to(`liveroom:${lroom.code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
+    io.to(`liveroom:${lroom.code}`).emit('room:activity', { type: 'join', name: viewerName });
+    console.log(`[LiveRooms] ${viewerName} joined ${lroom.code} (${lroom.viewers.size} viewers)`);
+  });
+
+  socket.on('room:host', ({ code, hostName }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة' });
+    lroom.hostSocketId = socket.id;
+    socket.join(`liveroom:${lroom.code}`);
+    socket._liveRoomCode = lroom.code;
+    socket._isHost = true;
+    socket.emit('room:host-ok', { code: lroom.code, viewerCount: lroom.viewers.size });
+  });
+
+  socket.on('room:chat', ({ code, message }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !message || !message.trim()) return;
+    const name = socket._liveRoomName || (socket._isHost ? lroom.hostName : 'مجهول');
+    const msg = { name, message: message.trim().substring(0, 200), ts: Date.now() };
+    lroom.chat.push(msg);
+    if (lroom.chat.length > 100) lroom.chat.shift();
+    io.to(`liveroom:${lroom.code}`).emit('room:chat', msg);
+    // Wheel keyword check
+    const w = lroom.wheel;
+    if (w.accepting && w.keyword && msg.message.includes(w.keyword) && !w.entries.has(socket.id)) {
+      const entry = { userId: socket.id, name };
+      w.entries.set(socket.id, entry);
+      io.to(`liveroom:${lroom.code}`).emit('room:wheel-update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: entry });
+    }
+    // Quiz answer check
+    const q = lroom.quiz;
+    if (q.active && !q.answers.has(socket.id)) {
+      const num = parseInt(msg.message.trim());
+      if (num >= 1 && num <= q.choices.length) {
+        q.answers.set(socket.id, num - 1);
+        if (num - 1 === q.correctIndex && !q.winner) q.winner = { name };
+        io.to(`liveroom:${lroom.code}`).emit('room:quiz-answer', { totalAnswers: q.answers.size });
+      }
+    }
+    // Poll vote check
+    const p = lroom.poll;
+    if (p.active && !p.votes.has(socket.id)) {
+      const num = parseInt(msg.message.trim());
+      if (num >= 1 && num <= p.options.length) {
+        p.votes.set(socket.id, num - 1);
+        const results = {};
+        p.options.forEach((_, i) => results[i] = 0);
+        p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+        io.to(`liveroom:${lroom.code}`).emit('room:poll-vote', { results, totalVotes: p.votes.size });
+      }
+    }
+  });
+
+  socket.on('room:poll-start', ({ code, question, options, timer }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const p = lroom.poll;
+    if (p.timer) clearTimeout(p.timer);
+    p.active = true; p.question = question || ''; p.options = options || []; p.votes = new Map();
+    const t = parseInt(timer) || 60;
+    p.endTime = Date.now() + t * 1000;
+    io.to(`liveroom:${lroom.code}`).emit('room:poll-start', { question: p.question, options: p.options, timer: t, endTime: p.endTime });
+    p.timer = setTimeout(() => {
+      p.active = false;
+      const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+      io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size });
+    }, t * 1000);
+  });
+
+  socket.on('room:poll-stop', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const p = lroom.poll; p.active = false;
+    if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+    const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+    io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size });
+  });
+
+  socket.on('room:wheel-keyword', ({ code, keyword }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    lroom.wheel.keyword = keyword || 'اشتراك';
+    io.to(`liveroom:${lroom.code}`).emit('room:wheel-keyword', { keyword: lroom.wheel.keyword });
+  });
+
+  socket.on('room:wheel-open', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    lroom.wheel.accepting = true;
+    io.to(`liveroom:${lroom.code}`).emit('room:wheel-open', { keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size });
+  });
+
+  socket.on('room:wheel-close', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    lroom.wheel.accepting = false;
+    io.to(`liveroom:${lroom.code}`).emit('room:wheel-close', {});
+  });
+
+  socket.on('room:wheel-clear', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    lroom.wheel.entries.clear();
+    io.to(`liveroom:${lroom.code}`).emit('room:wheel-update', { entries: [], count: 0, fullSync: true });
+  });
+
+  socket.on('room:wheel-spin', ({ code, duration }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const w = lroom.wheel;
+    if (w.entries.size < 2) return socket.emit('room:error', { message: 'يحتاج مشتركين أكثر' });
+    const entries = Array.from(w.entries.values());
+    const winnerIndex = Math.floor(Math.random() * entries.length);
+    const winner = entries[winnerIndex];
+    io.to(`liveroom:${lroom.code}`).emit('room:wheel-spin', { winner, winnerIndex, entries, duration: (duration || 5) * 1000 });
+  });
+
+  socket.on('room:quiz-start', ({ code, question, choices, correctIndex, timer }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const q = lroom.quiz;
+    if (q.timer) clearTimeout(q.timer);
+    q.active = true; q.question = question || ''; q.choices = choices || [];
+    q.correctIndex = parseInt(correctIndex) ?? -1; q.answers = new Map(); q.winner = null;
+    const t = parseInt(timer) || 30;
+    q.endTime = Date.now() + t * 1000;
+    io.to(`liveroom:${lroom.code}`).emit('room:quiz-start', { question: q.question, choices: q.choices, timer: t, endTime: q.endTime });
+    q.timer = setTimeout(() => {
+      q.active = false;
+      const results = {}; q.choices.forEach((_, i) => results[i] = 0); q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
+      io.to(`liveroom:${lroom.code}`).emit('room:quiz-end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
+    }, t * 1000);
+  });
+
+  socket.on('room:quiz-stop', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const q = lroom.quiz; q.active = false;
+    if (q.timer) { clearTimeout(q.timer); q.timer = null; }
+    const results = {}; q.choices.forEach((_, i) => results[i] = 0); q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
+    io.to(`liveroom:${lroom.code}`).emit('room:quiz-end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
+  });
+
+  socket.on('room:close', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    io.to(`liveroom:${lroom.code}`).emit('room:closed', { message: 'أغلق المضيف الغرفة' });
+    liveRooms.delete(lroom.code);
+    console.log(`[LiveRooms] Closed ${lroom.code}`);
+  });
+  // ─────────────────────────────────────────────────────
+});
+
+// ══════════════════════════════════════════════════════════
+// ── LIVE ROOMS (غرف تفاعلية بدون TikTok) ────────────────
+// ══════════════════════════════════════════════════════════
+const liveRooms = new Map();
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function createLiveRoom(hostName) {
+  let code;
+  do { code = generateRoomCode(); } while (liveRooms.has(code));
+  const room = {
+    code, hostName, hostSocketId: null, createdAt: Date.now(),
+    viewers: new Map(), chat: [],
+    poll: { active: false, question: '', options: [], votes: new Map(), endTime: 0, timer: null },
+    wheel: { entries: new Map(), accepting: false, keyword: 'اشتراك' },
+    quiz: { active: false, question: '', choices: [], correctIndex: -1, answers: new Map(), winner: null, endTime: 0, timer: null },
+  };
+  liveRooms.set(code, room);
+  return room;
+}
+
+function getRoomViewerList(room) {
+  return Array.from(room.viewers.values()).map(v => v.name);
+}
+
+// Auto-cleanup after 3 hours
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of liveRooms) {
+    if (now - room.createdAt > 3 * 60 * 60 * 1000) liveRooms.delete(code);
+  }
+}, 15 * 60 * 1000);
+
+app.post('/api/rooms/create', (req, res) => {
+  const hostName = (req.body.hostName || '').trim();
+  if (!hostName) return res.json({ ok: false, error: 'اسم المضيف مطلوب' });
+  const room = createLiveRoom(hostName);
+  console.log(`[LiveRooms] Created ${room.code} by ${hostName}`);
+  res.json({ ok: true, code: room.code, hostName });
+});
+
+app.get('/api/rooms/:code', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false, error: 'الغرفة غير موجودة' });
+  res.json({ ok: true, code: room.code, hostName: room.hostName, viewerCount: room.viewers.size, viewers: getRoomViewerList(room) });
+});
+
+app.get('/api/rooms/:code/wheel', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false });
+  const w = room.wheel;
+  res.json({ entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, keyword: w.keyword });
+});
+
+app.get('/api/rooms/:code/poll', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false });
+  const p = room.poll;
+  const results = {};
+  p.options.forEach((_, i) => results[i] = 0);
+  p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+  res.json({ active: p.active, question: p.question, options: p.options, results, totalVotes: p.votes.size, endTime: p.endTime || 0 });
+});
+
+app.get('/api/rooms/:code/quiz', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false });
+  const q = room.quiz;
+  res.json({ active: q.active, question: q.question, choices: q.choices, endTime: q.endTime || 0, totalAnswers: q.answers.size });
 });
 
 const PORT = process.env.PORT || 3000;
