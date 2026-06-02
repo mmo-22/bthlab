@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><link rel="icon" type="image/png" href="/favicon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏆 بطولة الخروج — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root{--bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--border:rgba(255,255,255,.08);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#666;--green:#1dba72;--amber:#f59e0b;--red:#ef4444;--pink:#ff6b9d}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:18px;font-weight:700}.logo span{color:var(--pink)}
+.container{max-width:700px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.card-title{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.how-box{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:13px;color:rgba(255,255,255,.6);line-height:2;border-right:3px solid var(--pink)}
+.how-box strong{color:var(--pink)}
+.field{margin-bottom:12px}
+label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
+input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:14px;padding:10px 14px;border-radius:8px;outline:none}
+input:focus,textarea:focus{border-color:var(--pink)}
+.btn{border:none;font-family:inherit;font-size:14px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;width:100%;transition:all .15s}
+.btn:hover{opacity:.85}
+.btn-register{background:var(--pink);color:#fff}
+.btn-lock{background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+.btn-ask{background:var(--green);color:#fff}
+.btn-reveal{background:var(--amber);color:#000}
+.btn-stop{background:var(--accent);color:#fff}
+.btns-row{display:flex;gap:8px}.btns-row .btn{flex:1}
+.players-count{text-align:center;font-size:48px;font-weight:900;color:var(--pink);padding:16px}
+.players-label{text-align:center;font-size:14px;color:var(--muted)}
+.round-badge{text-align:center;font-size:13px;font-weight:700;color:var(--amber);padding:8px}
+.eliminated-list{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.elim-tag{padding:4px 10px;border-radius:8px;font-size:11px;background:rgba(239,68,68,.1);color:var(--red);text-decoration:line-through}
+.alive-tag{padding:4px 10px;border-radius:8px;font-size:11px;background:rgba(29,186,114,.1);color:var(--green)}
+.winner-display{text-align:center;padding:20px;font-size:24px;font-weight:900;color:var(--amber)}
+.overlay-link{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:12px;color:var(--accent2);word-break:break-all;cursor:pointer}
+.choice-row{display:flex;gap:8px;margin-bottom:8px}.choice-row input{flex:1}
+.choice-row .num{min-width:30px;display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--muted)}
+.correct-select{display:flex;gap:6px;margin-bottom:12px}.correct-opt{flex:1;padding:8px;text-align:center;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:700;background:var(--surface2);color:var(--muted);transition:all .15s}
+.correct-opt.active{border-color:var(--green);background:rgba(29,186,114,.1);color:var(--green)}
+@media(max-width:500px){.container{padding:14px 10px}.card{padding:14px}.btns-row{flex-direction:column}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🏆 بطولة الخروج <span>Control</span></div>
+  <div style="font-size:13px;color:var(--muted)" id="status">غير متصل</div>
+</header>
+<div class="container">
+  <div class="how-box">
+    <strong>📖 كيف تشتغل البطولة:</strong><br>
+    1. افتح <strong>التسجيل</strong> — المشاهدين يكتبون كلمة الدخول في الشات عشان يسجلون<br>
+    2. <strong>اقفل التسجيل</strong> وابدأ اسأل أسئلة بخيارات<br>
+    3. اللي يجاوب <strong>غلط يطلع</strong> من البطولة<br>
+    4. آخر واحد يبقى = <strong>الفائز!</strong> 🏆
+  </div>
+
+  <!-- Registration -->
+  <div class="card" id="reg-card">
+    <div class="card-title">تسجيل اللاعبين</div>
+    <div class="field"><label>كلمة الدخول</label><input type="text" id="keyword" value="بطولة" placeholder="الكلمة اللي يكتبها المشاهد"></div>
+    <div class="field"><label>الحد الأقصى للاعبين</label><input type="number" id="max-players" value="50" min="4" max="200"></div>
+    <button class="btn btn-register" onclick="openRegistration()">📝 افتح التسجيل</button>
+  </div>
+
+  <!-- Players -->
+  <div class="card" id="players-card" style="display:none">
+    <div class="players-count" id="player-count">0</div>
+    <div class="players-label" id="player-label">لاعب مسجل</div>
+    <div class="round-badge" id="round-badge"></div>
+    <div class="btns-row" style="margin-top:12px">
+      <button class="btn btn-lock" onclick="lockRegistration()">🔒 اقفل التسجيل</button>
+      <button class="btn btn-stop" onclick="stopGame()">⏹ أنهِ البطولة</button>
+    </div>
+  </div>
+
+  <!-- Question -->
+  <div class="card" id="question-card" style="display:none">
+    <div class="card-title">السؤال</div>
+    <div class="field"><label>السؤال</label><input type="text" id="q-text" placeholder="اكتب السؤال هنا"></div>
+    <div id="choices-container">
+      <div class="choice-row"><span class="num">1</span><input type="text" class="choice-input" placeholder="الخيار الأول"></div>
+      <div class="choice-row"><span class="num">2</span><input type="text" class="choice-input" placeholder="الخيار الثاني"></div>
+      <div class="choice-row"><span class="num">3</span><input type="text" class="choice-input" placeholder="الخيار الثالث"></div>
+      <div class="choice-row"><span class="num">4</span><input type="text" class="choice-input" placeholder="الخيار الرابع"></div>
+    </div>
+    <label style="margin-top:8px">الإجابة الصحيحة</label>
+    <div class="correct-select" id="correct-select">
+      <div class="correct-opt" onclick="selectCorrect(0)">1</div>
+      <div class="correct-opt" onclick="selectCorrect(1)">2</div>
+      <div class="correct-opt" onclick="selectCorrect(2)">3</div>
+      <div class="correct-opt" onclick="selectCorrect(3)">4</div>
+    </div>
+    <div class="field"><label>وقت الإجابة (ثانية)</label><input type="number" id="answer-time" value="15" min="5" max="60"></div>
+    <div class="btns-row">
+      <button class="btn btn-ask" onclick="askQuestion()">📤 أرسل السؤال</button>
+      <button class="btn btn-reveal" onclick="revealAnswer()">👁 اكشف الجواب</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="card" id="results-card" style="display:none">
+    <div class="card-title">النتائج</div>
+    <div class="winner-display" id="winner-display" style="display:none"></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">الباقين:</div>
+    <div class="eliminated-list" id="alive-list"></div>
+    <div style="font-size:12px;color:var(--muted);margin:12px 0 8px">خرجوا:</div>
+    <div class="eliminated-list" id="elim-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 رابط الأوفرلي</div>
+    <div class="overlay-link" id="overlay-link" onclick="navigator.clipboard.writeText(this.textContent);this.style.color='#1dba72';setTimeout(()=>this.style.color='',1500)">اتصل أولاً</div>
+  </div>
+</div>
+<script>
+const params=new URLSearchParams(location.search);
+const username=params.get('username')||'';
+const socket=io();
+let correctIndex=0;
+
+if(username){socket.emit('join',{username});document.getElementById('status').textContent='@'+username;document.getElementById('overlay-link').textContent=location.origin+'/knockout-overlay.html?username='+username;}
+
+function selectCorrect(i){correctIndex=i;document.querySelectorAll('.correct-opt').forEach((el,j)=>el.classList.toggle('active',j===i));}
+selectCorrect(0);
+
+async function openRegistration(){
+  const keyword=document.getElementById('keyword').value.trim();
+  const maxPlayers=parseInt(document.getElementById('max-players').value)||50;
+  await fetch('/api/knockout/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,keyword,maxPlayers})});
+  document.getElementById('players-card').style.display='block';
+  document.getElementById('player-count').textContent='0';
+  document.getElementById('round-badge').textContent='التسجيل مفتوح — اكتب "'+keyword+'" في الشات';
+}
+
+async function lockRegistration(){
+  await fetch('/api/knockout/lock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+  document.getElementById('question-card').style.display='block';
+  document.getElementById('round-badge').textContent='🔒 التسجيل مقفل — جاهز للأسئلة';
+}
+
+async function askQuestion(){
+  const question=document.getElementById('q-text').value.trim();
+  const options=Array.from(document.querySelectorAll('.choice-input')).map(el=>el.value.trim()).filter(v=>v);
+  const answerTime=parseInt(document.getElementById('answer-time').value)||15;
+  if(!question||options.length<2)return alert('اكتب السؤال والخيارات');
+  await fetch('/api/knockout/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,question,options,correct:correctIndex,answerTime})});
+}
+
+async function revealAnswer(){
+  await fetch('/api/knockout/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+}
+
+async function stopGame(){
+  await fetch('/api/knockout/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+  document.getElementById('players-card').style.display='none';
+  document.getElementById('question-card').style.display='none';
+  document.getElementById('results-card').style.display='none';
+}
+
+socket.on('knockout:joined',d=>{document.getElementById('player-count').textContent=d.count;document.getElementById('player-label').textContent=d.count+'/'+d.max+' لاعب';});
+socket.on('knockout:locked',d=>{document.getElementById('player-count').textContent=d.count;document.getElementById('player-label').textContent=d.count+' لاعب — البطولة بدأت';});
+socket.on('knockout:question',d=>{document.getElementById('round-badge').textContent='⚡ الجولة '+d.round+' — '+d.alivePlayers+' لاعب باقي';});
+socket.on('knockout:answered',d=>{document.getElementById('round-badge').textContent='📝 '+d.count+'/'+d.total+' جاوبوا';});
+socket.on('knockout:reveal',d=>{
+  document.getElementById('results-card').style.display='block';
+  document.getElementById('round-badge').textContent='الجولة '+d.round+' — '+d.aliveCount+' باقي';
+  document.getElementById('elim-list').innerHTML+=(d.eliminated||[]).map(e=>'<span class="elim-tag">'+e.name+'</span>').join('');
+  document.getElementById('player-count').textContent=d.aliveCount;
+  if(d.winner){
+    document.getElementById('winner-display').style.display='block';
+    document.getElementById('winner-display').textContent='🏆 '+d.winner.name+' فاز!';
+  }
+});
+socket.on('knockout:stopped',()=>{document.getElementById('players-card').style.display='none';document.getElementById('question-card').style.display='none';document.getElementById('results-card').style.display='none';});
+
+if(username)fetch(`/api/knockout/${username}`).then(r=>r.json()).then(d=>{
+  if(d.phase!=='idle'){
+    document.getElementById('players-card').style.display='block';
+    document.getElementById('player-count').textContent=d.aliveCount;
+    document.getElementById('player-label').textContent=d.playerCount+' لاعب — '+d.aliveCount+' باقي';
+    if(d.phase==='locked'||d.phase==='question'||d.phase==='reveal')document.getElementById('question-card').style.display='block';
+  }
+});
+</script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06);width:100%">© 2026 BthLab. جميع الحقوق محفوظة.</div>
+</body>
+</html>

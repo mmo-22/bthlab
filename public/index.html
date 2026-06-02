@@ -5,6 +5,13 @@
 <link rel="icon" type="image/png" href="/favicon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BthLab — مختبر البث</title>
+<meta name="description" content="BthLab مختبر البث — أدوات تفاعلية للبث المباشر على تيك توك. فعاليات، مسابقات، وتفاعل حقيقي مع جمهورك.">
+<meta property="og:title" content="BthLab — مختبر البث">
+<meta property="og:description" content="أدوات تفاعلية للبث المباشر على تيك توك — عجلة الحظ، حرب الكلمات، سؤال وجواب وأكثر!">
+<meta property="og:image" content="https://bthlab.live/logo-512.png">
+<meta property="og:url" content="https://bthlab.live">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#555;--green:#00e676}
@@ -46,8 +53,8 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .feature-icon{font-size:28px;margin-bottom:10px}
 .feature-title{font-size:15px;font-weight:700;margin-bottom:4px}
 .feature-desc{font-size:12px;color:var(--muted);line-height:1.6}
-.feature-status{display:inline-block;margin-top:8px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(37,244,238,.08);color:var(--accent2)}
-.feature-status.coming{background:rgba(255,255,255,.04);color:var(--muted)}
+.feature-status{display:inline-block;margin-top:8px;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(0,230,118,.12);color:#00e676;border:1px solid rgba(0,230,118,.2)}
+.feature-status.coming{background:rgba(255,255,255,.06);color:#aaa;border:1px solid rgba(255,255,255,.08)}
 .steps-list{display:flex;flex-direction:column;gap:16px}
 .step{display:flex;gap:16px;align-items:flex-start;padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:14px}
 .step-num{width:36px;height:36px;background:var(--accent2);color:#000;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0}
@@ -82,6 +89,12 @@ body.light .hero h1 span{background:linear-gradient(135deg,#0891b2,#e11d48);-web
 body.light .nav-btn{background:#0891b2}
 body.light .hero-cta{background:#0891b2}
 body.light .footer{border-top-color:rgba(0,0,0,.06)}
+body.light .price-features li{color:rgba(0,0,0,.7)}
+body.light .pricing-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1)}
+body.light .price-num{color:var(--text)}
+body.light .price-unit{color:var(--muted)}
+body.light .trust-row{color:var(--muted)}
+body.light .price-cta{background:#0891b2}
 .theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:40px;height:40px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 .theme-toggle:hover{transform:scale(1.1)}
 @media(max-width:480px){.nav-links .nav-link{display:none}.feature-grid{grid-template-columns:1fr}.price-features{grid-template-columns:1fr}.footer-links{flex-direction:column;align-items:center;gap:8px}}
@@ -103,7 +116,7 @@ body.light .footer{border-top-color:rgba(0,0,0,.06)}
 </nav>
 
 <section class="hero">
-  <div class="hero-badge">🧪 إطلاق تجريبي</div>
+  <a href="#features" class="hero-badge" style="text-decoration:none">🧪 إطلاق تجريبي</a>
   <h1>حوّل بثك المباشر<br>إلى <span>تجربة تفاعلية</span></h1>
   <p>أدوات ذكية تربط بين شات تيك توك وبثك — فعاليات، مسابقات، وتفاعل حقيقي مع جمهورك</p>
   <a href="#pricing" class="hero-cta">🚀 ابدأ الحين</a>
@@ -124,6 +137,8 @@ body.light .footer{border-top-color:rgba(0,0,0,.06)}
     <div class="feature-card"><div class="feature-icon">⚔️</div><div class="feature-title">حرب الكلمات</div><div class="feature-desc">فريقين يتنافسون بكتابة كلمات من فئة محددة</div><div class="feature-status">✓ متاح</div></div>
     <div class="feature-card"><div class="feature-icon">❓</div><div class="feature-title">سؤال وجواب</div><div class="feature-desc">سؤال بخيارات والمشاهدين يجاوبون بالرقم — الأسرع يفوز</div><div class="feature-status">✓ متاح</div></div>
     <div class="feature-card"><div class="feature-icon">🎯</div><div class="feature-title">التصويت</div><div class="feature-desc">اسأل جمهورك رأيهم — النتائج تتحدث لحظياً</div><div class="feature-status">✓ متاح</div></div>
+    <div class="feature-card"><div class="feature-icon">🔮</div><div class="feature-title">خمن الكلمة</div><div class="feature-desc">حروف مكشوفة والجمهور يتسابق على تخمين الكلمة الصحيحة</div><div class="feature-status">✓ متاح</div></div>
+    <div class="feature-card"><div class="feature-icon">🏆</div><div class="feature-title">بطولة الخروج</div><div class="feature-desc">أسئلة متتالية — اللي يغلط يطلع والأخير يفوز</div><div class="feature-status">✓ متاح</div></div>
     <div class="feature-card"><div class="feature-icon">🎭</div><div class="feature-title">خمّن الشخصية</div><div class="feature-desc">أدلّة تظهر تدريجياً والجمهور يخمّن</div><div class="feature-status coming">قريباً</div></div>
   </div>
 </section>
@@ -145,7 +160,7 @@ body.light .footer{border-top-color:rgba(0,0,0,.06)}
     <div class="price-row"><span class="price-num">80</span><span class="price-unit">ريال / شهر</span></div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">بدون عقد، بدون التزام</p>
     <ul class="price-features">
-      <li>عجلة الحظ</li><li>كلمة السر</li><li>حرب الكلمات</li><li>سؤال وجواب</li><li>التصويت</li><li>Overlay لـ OBS</li><li>لوحة تحكم كاملة</li><li>اتصال تلقائي</li><li>دعم فني</li><li>تحديثات مجاناً</li>
+      <li>عجلة الحظ</li><li>كلمة السر</li><li>حرب الكلمات</li><li>سؤال وجواب</li><li>التصويت</li><li>خمن الكلمة</li><li>بطولة الخروج</li><li>Overlay لـ OBS</li><li>لوحة تحكم كاملة</li><li>دعم فني + تحديثات</li>
     </ul>
     <a href="/login.html" class="price-cta">🚀 اشترك الحين</a>
     <div class="trust-row"><span>🔒 دفع آمن</span><span>💳 مدى / فيزا</span><span>↩️ استرجاع 3 أيام</span></div>

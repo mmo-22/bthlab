@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><link rel="icon" type="image/png" href="/favicon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔮 خمن الكلمة — BthLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root{--bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--border:rgba(255,255,255,.08);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#666;--green:#1dba72;--amber:#f59e0b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:18px;font-weight:700}.logo span{color:var(--accent2)}
+.container{max-width:700px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.card-title{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.how-box{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:13px;color:rgba(255,255,255,.6);line-height:2;border-right:3px solid var(--accent2)}
+.how-box strong{color:var(--accent2)}
+.field{margin-bottom:12px}
+label{font-size:13px;color:#aaa;display:block;margin-bottom:6px}
+input,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:14px;padding:10px 14px;border-radius:8px;outline:none}
+input:focus,textarea:focus{border-color:var(--accent2)}
+textarea{resize:vertical;min-height:60px}
+.btn{border:none;font-family:inherit;font-size:14px;font-weight:700;padding:12px;border-radius:10px;cursor:pointer;width:100%;transition:all .15s}
+.btn:hover{opacity:.85}
+.btn-start{background:var(--green);color:#fff}
+.btn-stop{background:var(--accent);color:#fff}
+.btn-next{background:var(--accent2);color:#000}
+.btns-row{display:flex;gap:8px}
+.btns-row .btn{flex:1}
+.letters{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.letter-box{width:42px;height:50px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900}
+.letter-box.revealed{border-color:var(--accent2);color:var(--accent2);background:rgba(37,244,238,.08)}
+.winners-list{margin-top:12px}
+.winner-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px}
+.winner-item img{width:32px;height:32px;border-radius:50%}
+.winner-item .rank{font-size:16px;font-weight:900;color:var(--amber);min-width:24px}
+.winner-item .name{font-size:14px;font-weight:700}
+.overlay-link{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:12px;color:var(--accent2);word-break:break-all;cursor:pointer}
+@media(max-width:500px){.container{padding:14px 10px}.card{padding:14px}.letters{gap:4px}.letter-box{width:34px;height:42px;font-size:16px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🔮 خمن الكلمة <span>Control</span></div>
+  <div style="font-size:13px;color:var(--muted)" id="status">غير متصل</div>
+</header>
+<div class="container">
+  <div class="how-box">
+    <strong>📖 كيف تشتغل:</strong><br>
+    1. اكتب <strong>كلمة</strong> سرية وتلميح (اختياري)<br>
+    2. بعض الحروف تنكشف تلقائياً<br>
+    3. المشاهدين يكتبون الكلمة في الشات — أول 5 يخمنون صح يفوزون!
+  </div>
+
+  <div class="card">
+    <div class="card-title">الكلمة</div>
+    <div class="field"><label>الكلمة السرية</label><input type="text" id="word-input" placeholder="مثال: فراولة"></div>
+    <div class="field"><label>تلميح (اختياري)</label><input type="text" id="hint-input" placeholder="مثال: فاكهة حمراء"></div>
+    <button class="btn btn-start" onclick="startGame()">🚀 ابدأ</button>
+  </div>
+
+  <div class="card" id="live-card" style="display:none">
+    <div class="card-title">الجولة الحالية</div>
+    <div id="hint-display" style="text-align:center;font-size:14px;color:var(--amber);margin-bottom:8px"></div>
+    <div class="letters" id="letters-display"></div>
+    <div class="btns-row">
+      <button class="btn btn-stop" onclick="stopGame()">⏹ أوقف</button>
+    </div>
+    <div class="winners-list" id="winners-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 رابط الأوفرلي</div>
+    <div class="overlay-link" id="overlay-link" onclick="navigator.clipboard.writeText(this.textContent);this.style.color='#1dba72';setTimeout(()=>this.style.color='',1500)">اتصل أولاً</div>
+  </div>
+</div>
+<script>
+const params=new URLSearchParams(location.search);
+const username=params.get('username')||'';
+const socket=io();
+if(username){socket.emit('join',{username});document.getElementById('status').textContent='@'+username;document.getElementById('overlay-link').textContent=location.origin+'/guess-overlay.html?username='+username;}
+
+async function startGame(){
+  const word=document.getElementById('word-input').value.trim();
+  const hint=document.getElementById('hint-input').value.trim();
+  if(!word)return alert('اكتب كلمة');
+  await fetch('/api/guess/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,word,hint})});
+}
+
+async function stopGame(){
+  await fetch('/api/guess/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+  document.getElementById('live-card').style.display='none';
+}
+
+socket.on('guess:started',d=>{
+  document.getElementById('live-card').style.display='block';
+  document.getElementById('hint-display').textContent=d.hint?'💡 '+d.hint:'';
+  const lettersHtml=Array.from({length:d.length},(_,i)=>{
+    const letter=d.letters.find(l=>l.i===i);
+    return `<div class="letter-box ${letter?'revealed':''}">${letter?letter.c:'?'}</div>`;
+  }).join('');
+  document.getElementById('letters-display').innerHTML=lettersHtml;
+  document.getElementById('winners-list').innerHTML='';
+});
+
+socket.on('guess:won',d=>{
+  const list=document.getElementById('winners-list');
+  list.innerHTML=(d.winners||[]).map((w,i)=>`<div class="winner-item"><span class="rank">#${i+1}</span>${w.avatar?'<img src="'+w.avatar+'">':''}<span class="name">${w.name}</span></div>`).join('');
+});
+
+socket.on('guess:stopped',d=>{
+  document.getElementById('live-card').style.display='none';
+});
+
+// Load state
+if(username)fetch(`/api/guess/${username}`).then(r=>r.json()).then(d=>{
+  if(d.active){
+    document.getElementById('live-card').style.display='block';
+    document.getElementById('hint-display').textContent=d.hint?'💡 '+d.hint:'';
+    const lettersHtml=Array.from({length:d.length},(_,i)=>{
+      const letter=d.letters.find(l=>l.i===i);
+      return `<div class="letter-box ${letter?'revealed':''}">${letter?letter.c:'?'}</div>`;
+    }).join('');
+    document.getElementById('letters-display').innerHTML=lettersHtml;
+  }
+});
+</script>
+<div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06);width:100%">© 2026 BthLab. جميع الحقوق محفوظة.</div>
+</body>
+</html>

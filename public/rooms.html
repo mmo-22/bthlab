@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>الغرف التفاعلية — BthLab</title>
 <style>
@@ -284,7 +285,7 @@
     const btn = document.getElementById('btn-create');
     btn.disabled = true; btn.textContent = '...جاري الإنشاء';
     try {
-      const res = await fetch('/api/rooms/create', {
+      const res = await fetch('/api/live-rooms/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hostName }),
@@ -324,7 +325,7 @@
     const btn = document.getElementById('btn-join');
     btn.disabled = true; btn.textContent = '...جاري التحقق';
     try {
-      const res = await fetch(`/api/rooms/${code}`);
+      const res = await fetch(`/api/live-rooms/${code}`);
       const data = await res.json();
       if (!data.ok) { err.textContent = 'الغرفة غير موجودة أو انتهت'; return; }
       location.href = `/room.html?code=${code}&name=${encodeURIComponent(name)}`;

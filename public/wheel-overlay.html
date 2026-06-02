@@ -13,7 +13,25 @@
     background:transparent;
     width:100vw; height:100vh;
     display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
     font-family:'Tajawal',sans-serif; overflow:hidden;
+  }
+  /* Mobile mode */
+  body.mobile { transform:scale(0.55); transform-origin:center center; }
+
+  /* Registration banner - static above wheel */
+  #reg-banner {
+    display:none;
+    background:rgba(0,0,0,0.9);
+    border:2px solid #ffd700;
+    border-radius:16px;
+    padding:14px 24px;
+    color:#fff;
+    font-size:20px;
+    font-weight:900;
+    text-align:center;
+    min-width:280px;
+    margin-bottom:24px;
   }
 
   .wheel-wrap {
@@ -81,7 +99,7 @@
 
 <div id="waiting">في انتظار الدوران...</div>
 
-<div id="reg-banner" style="display:none;position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);border:2px solid #ffd700;border-radius:16px;padding:14px 24px;color:#fff;font-size:20px;font-weight:900;text-align:center;min-width:280px">
+<div id="reg-banner">
   <div style="font-size:14px;color:#ffd700;margin-bottom:6px">📝 التسجيل مفتوح</div>
   <div><span id="reg-count" style="color:#25f4ee;font-size:24px">0</span> مشارك</div>
   <div id="reg-timer" style="display:none;font-size:28px;color:#ffd700;margin-top:6px">00:00</div>
@@ -105,6 +123,11 @@ const params   = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey  = params.get('key') || '';
 const socket   = io();
+
+// Mobile mode
+if (params.get('mobile') === '1' || params.get('mobile') === 'true') {
+  document.body.classList.add('mobile');
+}
 
 // If key provided but no username, resolve from server
 if (!username && authKey) {
@@ -137,6 +160,8 @@ let spinning     = false;
 let regTimer     = null;
 let regEndTime   = 0;
 let accepting    = false;
+let wheelTextColor = '#fff';
+let wheelPointerColor = '#ffd700';
 
 // Load existing entries
 function loadWheelState() {
@@ -175,6 +200,14 @@ socket.on('wheel:update', ({ entries: e }) => {
   }
 });
 
+// Live config updates
+socket.on('wheel:config', (cfg) => {
+  if (cfg.colors && Array.isArray(cfg.colors)) COLORS.splice(0, COLORS.length, ...cfg.colors);
+  if (cfg.textColor) wheelTextColor = cfg.textColor;
+  if (cfg.pointerColor) { document.querySelector('.pointer').style.borderTopColor = cfg.pointerColor; wheelPointerColor = cfg.pointerColor; }
+  if (entries.length > 0) drawWheel(currentAngle);
+});
+
 socket.on('wheel:registration', ({ accepting: a, endTime, keyword, count }) => {
   accepting = a;
   regEndTime = endTime || 0;
@@ -187,6 +220,7 @@ socket.on('wheel:registration', ({ accepting: a, endTime, keyword, count }) => {
 
 function showRegBanner(keyword, count) {
   document.getElementById('reg-banner').style.display = 'block';
+  document.getElementById('waiting').style.display = 'none';
   document.getElementById('reg-kw-text').textContent = keyword;
   document.getElementById('reg-count').textContent = count;
   if (regEndTime > 0) {
@@ -199,6 +233,7 @@ function showRegBanner(keyword, count) {
 
 function hideRegBanner() {
   document.getElementById('reg-banner').style.display = 'none';
+  if (entries.length === 0) document.getElementById('waiting').style.display = 'flex';
   if (regTimer) { clearInterval(regTimer); regTimer = null; }
 }
 

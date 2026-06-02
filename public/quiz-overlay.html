@@ -9,6 +9,7 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { background:transparent; width:100vw; height:100vh; font-family:'Tajawal',sans-serif; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; padding-bottom:30px; }
+body.mobile{transform:scale(0.55);transform-origin:center center;}
 #container { display:none; max-width:500px; width:90vw; }
 .quiz-card { background:rgba(0,0,0,.88); border:2px solid rgba(37,244,238,.3); border-radius:20px; padding:20px 24px; backdrop-filter:blur(8px); }
 .question { font-size:18px; font-weight:900; color:#fff; text-align:center; margin-bottom:14px; line-height:1.6; }
@@ -38,6 +39,7 @@ html, body { background:transparent; width:100vw; height:100vh; font-family:'Taj
   </div>
 </div>
 <script>
+if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 const params = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey = params.get('key') || '';

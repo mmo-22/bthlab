@@ -213,14 +213,11 @@
     <div class="empty">لا يوجد اتصال — أضف يوزرنيم تيك توك حقك فوق</div>
   </div>
 
-  <!-- Live Rooms Banner -->
-  <div style="margin-top:20px;background:linear-gradient(135deg,rgba(124,107,255,.15),rgba(255,107,157,.1));border:1px solid rgba(124,107,255,.3);border-radius:14px;padding:16px 18px;display:flex;align-items:center;gap:14px">
-    <div style="font-size:2rem;flex-shrink:0">🎮</div>
-    <div style="flex:1">
-      <div style="font-size:14px;font-weight:700;color:#e8e8f0;margin-bottom:3px">الغرف التفاعلية</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.7">أنشئ غرفة وشارك الرابط مع جمهورك — شات + تصويت + عجلة + سؤال وجواب بدون تيك توك</div>
-    </div>
-    <a href="/rooms.html" style="background:linear-gradient(135deg,#7c6bff,#ff6b9d);color:white;border:none;font-family:inherit;font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;text-decoration:none;white-space:nowrap;flex-shrink:0">دخول ←</a>
+  <!-- Interactive Rooms -->
+  <div class="card" style="margin-top:20px;text-align:center">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">🎮 الغرف التفاعلية</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">أنشئ غرفة تفاعلية بدون تيك توك — شارك الرابط مع جمهورك</div>
+    <a href="/rooms.html" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:linear-gradient(135deg,#7c6bff,#ff6b9d);color:#fff;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;text-decoration:none;transition:all .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">🚀 إنشاء غرفة</a>
   </div>
 
   <!-- My Links Section -->
@@ -273,6 +270,8 @@ const GAMES = [
   { icon:'⚔️', name:'حرب الكلمات', page:'word-war.html', color:'#ef4444' },
   { icon:'❓', name:'سؤال وجواب', page:'quiz.html', color:'#a57afa' },
   { icon:'🎯', name:'التصويت', page:'poll.html', color:'#f59e0b' },
+  { icon:'🔮', name:'خمن الكلمة', page:'guess.html', color:'#1dba72' },
+  { icon:'🏆', name:'الخروج', page:'knockout.html', color:'#ff6b9d' },
 ];
 
 // Owner mode

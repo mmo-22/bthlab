@@ -5,6 +5,10 @@
 <link rel="icon" type="image/png" href="/favicon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تواصل معنا — BthLab</title>
+<meta name="description" content="تواصل مع فريق BthLab — استفسار، شكوى، أو اقتراح. نرد خلال 24 ساعة.">
+<meta property="og:title" content="تواصل معنا — BthLab">
+<meta property="og:description" content="تواصل مع فريق BthLab — نرد خلال 24 ساعة.">
+<meta property="og:image" content="https://bthlab.live/logo-512.png">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#555;--green:#1dba72;--red:#ef4444}
@@ -14,6 +18,9 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .nav-logo{font-size:18px;font-weight:900;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none}
 .nav-logo span{color:var(--accent2)}
 .nav-btn{padding:8px 20px;background:var(--accent2);color:#000;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;text-decoration:none}
+.nav-links{display:flex;gap:14px;align-items:center}
+.nav-link{color:var(--muted);font-size:13px;text-decoration:none;padding:6px 10px;border-radius:8px;transition:all .15s}
+.nav-link:hover{color:var(--text);background:var(--surface2)}
 .container{max-width:600px;margin:0 auto;padding:40px 20px}
 h1{font-size:28px;font-weight:900;text-align:center;margin-bottom:8px}
 .subtitle{text-align:center;font-size:14px;color:var(--muted);margin-bottom:32px}
@@ -55,6 +62,7 @@ body.light .social-link{color:#1a1a2e}
   .card{padding:18px}
   .info-grid{grid-template-columns:1fr}
   h1{font-size:22px}
+  .nav-links .nav-link{display:none}
 }
 </style>
 </head>
@@ -62,7 +70,13 @@ body.light .social-link{color:#1a1a2e}
 
 <nav class="navbar">
   <a href="/" class="nav-logo"><img src="/logo.svg" alt="BthLab" style="height:28px;vertical-align:middle;margin-left:6px"><span>BthLab</span></a>
-  <a href="/login.html" class="nav-btn">🔑 دخول</a>
+  <div class="nav-links">
+    <a href="/#features" class="nav-link">المميزات</a>
+    <a href="/#pricing" class="nav-link">الأسعار</a>
+    <a href="/about.html" class="nav-link">من نحن</a>
+    <a href="/contact.html" class="nav-link">تواصل معنا</a>
+    <a href="/login.html" class="nav-btn">🔑 دخول</a>
+  </div>
 </nav>
 
 <div class="container">
