@@ -333,6 +333,8 @@ app.get('/wheel.html', requireAuth, (req, res) => res.sendFile(path.join(__dirna
 app.get('/admin.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
 app.get('/password.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/password.html')));
 app.get('/word-war.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/word-war.html')));
+app.get('/guess.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/guess.html')));
+app.get('/knockout.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/knockout.html')));
 app.get('/quiz.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/quiz.html')));
 app.get('/poll.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/poll.html')));
 app.get('/subscriptions.html', (req, res) => {
@@ -348,6 +350,17 @@ app.use(express.static(path.join(__dirname, '../public')));
 // ══════════════════════════════════════════════════════════
 const rooms = {};
 const MAX_STORED = 100;
+
+function normalizeAr(s) {
+  if (!s) return '';
+  return s.trim()
+    .replace(/[أإآا]/g, 'ا')
+    .replace(/[ةه]/g, 'ه')
+    .replace(/[يى]/g, 'ي')
+    .replace(/\u0640/g, '')
+    .replace(/[\u064B-\u065F]/g, '')
+    .toLowerCase();
+}
 
 function broadcast(key, event, data) { io.to(`room:${key}`).emit(event, data); }
 
@@ -446,6 +459,56 @@ async function connectRoom(username, sessionid = null) {
               broadcast(key, 'word-war:word', { team, word: data.comment.trim(), player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, redScore: wwGame.redScore, blueScore: wwGame.blueScore });
             }
           }
+        }
+      }
+    }
+
+    // Check Guess Game (خمن الكلمة)
+    const guessGame = getGuessGame(key);
+
+    // Check Knockout (بطولة الخروج)
+    const ko = getKnockout(key);
+    if (data.comment && ko.phase !== 'idle') {
+      const comment = data.comment.trim().toLowerCase().replace(/\s+/g,'');
+      const uid = data.userId || data.uniqueId;
+      // Registration phase
+      if (ko.phase === 'register' && comment === ko.keyword && !ko.players.has(uid) && ko.players.size < ko.maxPlayers) {
+        ko.players.set(uid, { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, alive: true });
+        broadcast(key, 'knockout:joined', { count: ko.players.size, max: ko.maxPlayers, player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null });
+      }
+      // Question phase — answer by number
+      if (ko.phase === 'question' && ko.currentQuestion) {
+        const p = ko.players.get(uid);
+        if (p && p.alive && !ko.currentQuestion.answers.has(uid)) {
+          const num = parseInt(data.comment.trim());
+          if (num >= 1 && num <= ko.currentQuestion.options.length) {
+            ko.currentQuestion.answers.set(uid, num - 1);
+            broadcast(key, 'knockout:answered', { count: ko.currentQuestion.answers.size, total: Array.from(ko.players.values()).filter(pp => pp.alive).length });
+          }
+        }
+      }
+    }
+
+    // Check Guess Game (خمن الكلمة) — continued
+    if (guessGame.active && !guessGame.transitioning && data.comment) {
+      const commentClean = normalizeAr(data.comment);
+      const wordClean = normalizeAr(guessGame.word);
+      const alreadyWon = guessGame.winners.some(w => w.userId === data.userId || w.name === (data.nickname || data.uniqueId));
+      if (guessGame.winners.length < 5 && commentClean && wordClean && commentClean === wordClean && !alreadyWon) {
+        const uid = data.userId || data.uniqueId;
+        const existing = guessGame.playerStats.get(uid) || { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, totalWords: 0 };
+        existing.totalWords += 1;
+        existing.name = data.nickname || data.uniqueId;
+        existing.avatar = data.profilePictureUrl || null;
+        guessGame.playerStats.set(uid, existing);
+        const winner = { userId: uid, name: existing.name, avatar: existing.avatar, rank: guessGame.winners.length + 1, word: guessGame.word, totalWords: existing.totalWords };
+        guessGame.winners.push(winner);
+        const allPlayers = Array.from(guessGame.playerStats.entries()).map(([uid, s]) => ({ userId: uid, name: s.name, avatar: s.avatar, totalWords: s.totalWords })).sort((a,b) => b.totalWords - a.totalWords);
+        broadcast(key, 'guess:won', { winner, word: guessGame.word, winners: guessGame.winners, allPlayers });
+        if (guessGame.winners.length === 5 && !guessGame.transitioning) {
+          guessGame.active = false;
+          guessGame.transitioning = true;
+          broadcast(key, 'guess:reveal', { word: guessGame.word });
         }
       }
     }
@@ -724,6 +787,218 @@ app.get('/api/word-war/:username', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
+// ── Knockout (بطولة الخروج) ──────────────────────────────
+// ══════════════════════════════════════════════════════════
+const knockoutGames = {};
+function getKnockout(key) {
+  if (!knockoutGames[key]) knockoutGames[key] = {
+    phase: 'idle', keyword: 'بطولة', maxPlayers: 50,
+    players: new Map(), round: 0,
+    currentQuestion: null, answerTime: 15, timer: null,
+  };
+  return knockoutGames[key];
+}
+
+app.post('/api/knockout/register', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ko = getKnockout(key);
+  ko.phase = 'register';
+  ko.keyword = (req.body.keyword || 'بطولة').trim().toLowerCase().replace(/\s+/g,'');
+  ko.maxPlayers = parseInt(req.body.maxPlayers) || 50;
+  ko.players.clear(); ko.round = 0; ko.currentQuestion = null;
+  broadcast(key, 'knockout:register', { keyword: req.body.keyword || 'بطولة', maxPlayers: ko.maxPlayers });
+  res.json({ ok: true });
+});
+
+app.post('/api/knockout/lock', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ko = getKnockout(key);
+  ko.phase = 'locked';
+  const players = Array.from(ko.players.values());
+  broadcast(key, 'knockout:locked', { count: ko.players.size, players });
+  res.json({ ok: true });
+});
+
+app.post('/api/knockout/ask', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ko = getKnockout(key);
+  ko.phase = 'question'; ko.round++;
+  ko.currentQuestion = {
+    question: req.body.question || '',
+    options: req.body.options || [],
+    correct: parseInt(req.body.correct),
+    answerTime: parseInt(req.body.answerTime) || 15,
+    answers: new Map(),
+  };
+  const alive = Array.from(ko.players.values()).filter(p => p.alive).length;
+  broadcast(key, 'knockout:question', { question: ko.currentQuestion.question, options: ko.currentQuestion.options, round: ko.round, alivePlayers: alive, answerTime: ko.currentQuestion.answerTime });
+  // Auto-reveal after answerTime
+  if (ko.timer) clearTimeout(ko.timer);
+  ko.timer = setTimeout(() => {
+    if (ko.phase === 'question') revealKnockout(key);
+  }, (ko.currentQuestion.answerTime + 2) * 1000);
+  res.json({ ok: true });
+});
+
+function revealKnockout(key) {
+  const ko = getKnockout(key);
+  const q = ko.currentQuestion; if (!q) return;
+  ko.phase = 'reveal';
+  const eliminated = [];
+  ko.players.forEach((p, uid) => {
+    if (!p.alive) return;
+    const ans = q.answers.get(uid);
+    if (ans === undefined || ans !== q.correct) { p.alive = false; eliminated.push({ name: p.name, avatar: p.avatar }); }
+  });
+  const alive = Array.from(ko.players.values()).filter(p => p.alive);
+  const winner = alive.length <= 1 ? (alive[0] || null) : null;
+  broadcast(key, 'knockout:reveal', { correct: q.correct, eliminated, aliveCount: alive.length, winner, round: ko.round });
+}
+
+app.post('/api/knockout/reveal', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  if (getKnockout(key).timer) clearTimeout(getKnockout(key).timer);
+  revealKnockout(key);
+  res.json({ ok: true });
+});
+
+app.post('/api/knockout/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const ko = getKnockout(key);
+  ko.phase = 'idle';
+  if (ko.timer) { clearTimeout(ko.timer); ko.timer = null; }
+  broadcast(key, 'knockout:stopped', {});
+  res.json({ ok: true });
+});
+
+app.get('/api/knockout/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const ko = getKnockout(key);
+  const players = Array.from(ko.players.values());
+  const alive = players.filter(p => p.alive).length;
+  res.json({ phase: ko.phase, round: ko.round, playerCount: ko.players.size, aliveCount: alive, players });
+});
+
+// ══════════════════════════════════════════════════════════
+// ── Guess Game (خمن الكلمة) ──────────────────────────────
+// ══════════════════════════════════════════════════════════
+const guessGames = {};
+function getGuessGame(key) {
+  if (!guessGames[key]) guessGames[key] = {
+    word: '', hint: '', active: false, winner: null,
+    revealed: [], winners: [], playerStats: new Map(),
+    autoMode: false, wordPool: [], usedWords: new Set(),
+    scale: 1, transitionDelay: 5000, pendingTransition: null, transitioning: false,
+  };
+  return guessGames[key];
+}
+
+function goToNextWord(key) {
+  const game = getGuessGame(key);
+  game.pendingTransition = null;
+  game.transitioning = false;
+  let pool = (game.wordPool && game.wordPool.length) ? game.wordPool.filter(w => w.w !== game.word && !game.usedWords.has(w.w)) : [];
+  if (!pool.length && game.wordPool && game.wordPool.length) { game.usedWords.clear(); pool = game.wordPool.filter(w => w.w !== game.word); }
+  if (!pool.length) { game.winners = []; game.active = true; broadcast(key, 'guess:started', { length: game.word.length, hint: game.hint, revealed: game.revealed, letters: game.revealed.map(i => ({ i, c: game.word[i] })), winners: [] }); return; }
+  const next = pool[Math.floor(Math.random() * pool.length)];
+  game.word = next.w; game.hint = next.h || ''; game.active = true; game.winners = []; game.usedWords.add(next.w);
+  const indices = [...Array(next.w.length).keys()];
+  const revealCount = Math.max(1, Math.floor(next.w.length * 0.3));
+  game.revealed = indices.sort(() => Math.random() - 0.5).slice(0, revealCount).sort((a,b) => a-b);
+  broadcast(key, 'guess:started', { length: game.word.length, hint: game.hint, revealed: game.revealed, letters: game.revealed.map(i => ({ i, c: game.word[i] })), winners: [] });
+}
+
+app.post('/api/guess/start', (req, res) => {
+  const { username, word, hint, wordPool } = req.body;
+  const key = username?.toLowerCase().replace('@','').trim();
+  if (!key || !word) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  if (game.pendingTransition) { clearTimeout(game.pendingTransition); game.pendingTransition = null; }
+  game.transitioning = false;
+  if (!game.active) game.usedWords = new Set();
+  game.word = word.trim(); game.hint = hint || ''; game.active = true; game.winner = null; game.winners = [];
+  game.usedWords.add(game.word);
+  if (wordPool && Array.isArray(wordPool)) game.wordPool = wordPool;
+  const indices = [...Array(word.length).keys()];
+  const revealCount = Math.max(1, Math.floor(word.length * 0.3));
+  game.revealed = indices.sort(() => Math.random() - 0.5).slice(0, revealCount).sort((a,b) => a-b);
+  broadcast(key, 'guess:started', { length: game.word.length, hint: game.hint, revealed: game.revealed, letters: game.revealed.map(i => ({ i, c: game.word[i] })), winners: [] });
+  res.json({ ok: true });
+});
+
+app.post('/api/guess/next', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  if (game.pendingTransition) { clearTimeout(game.pendingTransition); game.pendingTransition = null; }
+  goToNextWord(key);
+  res.json({ ok: true });
+});
+
+app.post('/api/guess/delay', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  game.transitionDelay = Math.max(0, Math.min(60000, parseInt(req.body.delay) || 5000));
+  res.json({ ok: true, delay: game.transitionDelay });
+});
+
+app.post('/api/guess/auto', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  game.autoMode = !!req.body.enabled;
+  if (req.body.wordPool && Array.isArray(req.body.wordPool)) game.wordPool = req.body.wordPool;
+  res.json({ ok: true });
+});
+
+app.post('/api/guess/scale', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  game.scale = Math.max(0.6, Math.min(2, parseFloat(req.body.scale) || 1));
+  broadcast(key, 'guess:scale', { scale: game.scale });
+  res.json({ ok: true, scale: game.scale });
+});
+
+app.post('/api/guess/clear-stats', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  getGuessGame(key).playerStats.clear();
+  res.json({ ok: true });
+});
+
+app.post('/api/guess/clear-winners', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  getGuessGame(key).winners = [];
+  broadcast(key, 'guess:winners', { winners: [] });
+  res.json({ ok: true });
+});
+
+app.post('/api/guess/stop', (req, res) => {
+  const key = req.body.username?.toLowerCase().replace('@','').trim();
+  if (!key) return res.json({ ok: false });
+  const game = getGuessGame(key);
+  game.active = false; game.autoMode = false; game.usedWords = new Set();
+  const top5 = Array.from(game.playerStats.entries()).map(([uid, s]) => ({ userId: uid, name: s.name, avatar: s.avatar, totalWords: s.totalWords })).sort((a,b) => b.totalWords - a.totalWords).slice(0, 5);
+  broadcast(key, 'guess:stopped', { word: game.word, top5 });
+  res.json({ ok: true });
+});
+
+app.get('/api/guess/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const game = getGuessGame(key);
+  const allPlayers = Array.from(game.playerStats.entries()).map(([userId, s]) => ({ userId, name: s.name, avatar: s.avatar, totalWords: s.totalWords })).sort((a,b) => b.totalWords - a.totalWords);
+  res.json({ word: game.word, hint: game.hint, active: game.active, winner: game.winner, winners: game.winners || [], revealed: game.revealed, letters: game.revealed.map(i => ({ i, c: game.word[i] })), length: game.word.length, allPlayers, scale: game.scale || 1, transitionDelay: game.transitionDelay || 5000 });
+});
+
+// ══════════════════════════════════════════════════════════
 // ── Quiz (سؤال وجواب) ───────────────────────────────────
 // ══════════════════════════════════════════════════════════
 const quizzes = {};
@@ -903,271 +1178,7 @@ io.on('connection', (socket) => {
     }
   });
   let key = null;
-  socket.on('disconnect', () => {
-    if (key) socket.leave(`room:${key}`);
-
-    // Live rooms cleanup
-    const code = socket._liveRoomCode;
-    if (code) {
-      const lroom = liveRooms.get(code);
-      if (lroom) {
-        lroom.viewers.delete(socket.id);
-        io.to(`liveroom:${code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
-        if (socket._liveRoomName) {
-          io.to(`liveroom:${code}`).emit('room:activity', { type: 'leave', name: socket._liveRoomName });
-        }
-      }
-    }
-  });
-
-  // ─────────────────────────────────────────────────────
-  // LIVE ROOMS SOCKET HANDLERS
-  // ─────────────────────────────────────────────────────
-  socket.on('room:join', ({ code, name }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة أو انتهت' });
-    if (!name || !name.trim()) return socket.emit('room:error', { message: 'الاسم مطلوب' });
-    socket.rooms.forEach(r => { if (r.startsWith('liveroom:')) socket.leave(r); });
-    const viewerName = name.trim().substring(0, 30);
-    lroom.viewers.set(socket.id, { name: viewerName, joinedAt: Date.now() });
-    socket.join(`liveroom:${lroom.code}`);
-    socket._liveRoomCode = lroom.code;
-    socket._liveRoomName = viewerName;
-    socket.emit('room:joined', {
-      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size,
-      chatHistory: lroom.chat.slice(-30),
-      poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
-      wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
-      quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
-    });
-    io.to(`liveroom:${lroom.code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
-    io.to(`liveroom:${lroom.code}`).emit('room:activity', { type: 'join', name: viewerName });
-    console.log(`[LiveRooms] ${viewerName} joined ${lroom.code} (${lroom.viewers.size} viewers)`);
-  });
-
-  socket.on('room:host', ({ code, hostName }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة' });
-    lroom.hostSocketId = socket.id;
-    socket.join(`liveroom:${lroom.code}`);
-    socket._liveRoomCode = lroom.code;
-    socket._isHost = true;
-    socket.emit('room:host-ok', { code: lroom.code, viewerCount: lroom.viewers.size });
-  });
-
-  socket.on('room:chat', ({ code, message }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !message || !message.trim()) return;
-    const name = socket._liveRoomName || (socket._isHost ? lroom.hostName : 'مجهول');
-    const msg = { name, message: message.trim().substring(0, 200), ts: Date.now() };
-    lroom.chat.push(msg);
-    if (lroom.chat.length > 100) lroom.chat.shift();
-    io.to(`liveroom:${lroom.code}`).emit('room:chat', msg);
-    // Wheel keyword check
-    const w = lroom.wheel;
-    if (w.accepting && w.keyword && msg.message.includes(w.keyword) && !w.entries.has(socket.id)) {
-      const entry = { userId: socket.id, name };
-      w.entries.set(socket.id, entry);
-      io.to(`liveroom:${lroom.code}`).emit('room:wheel-update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: entry });
-    }
-    // Quiz answer check
-    const q = lroom.quiz;
-    if (q.active && !q.answers.has(socket.id)) {
-      const num = parseInt(msg.message.trim());
-      if (num >= 1 && num <= q.choices.length) {
-        q.answers.set(socket.id, num - 1);
-        if (num - 1 === q.correctIndex && !q.winner) q.winner = { name };
-        io.to(`liveroom:${lroom.code}`).emit('room:quiz-answer', { totalAnswers: q.answers.size });
-      }
-    }
-    // Poll vote check
-    const p = lroom.poll;
-    if (p.active && !p.votes.has(socket.id)) {
-      const num = parseInt(msg.message.trim());
-      if (num >= 1 && num <= p.options.length) {
-        p.votes.set(socket.id, num - 1);
-        const results = {};
-        p.options.forEach((_, i) => results[i] = 0);
-        p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
-        io.to(`liveroom:${lroom.code}`).emit('room:poll-vote', { results, totalVotes: p.votes.size });
-      }
-    }
-  });
-
-  socket.on('room:poll-start', ({ code, question, options, timer }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    const p = lroom.poll;
-    if (p.timer) clearTimeout(p.timer);
-    p.active = true; p.question = question || ''; p.options = options || []; p.votes = new Map();
-    const t = parseInt(timer) || 60;
-    p.endTime = Date.now() + t * 1000;
-    io.to(`liveroom:${lroom.code}`).emit('room:poll-start', { question: p.question, options: p.options, timer: t, endTime: p.endTime });
-    p.timer = setTimeout(() => {
-      p.active = false;
-      const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
-      io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size });
-    }, t * 1000);
-  });
-
-  socket.on('room:poll-stop', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    const p = lroom.poll; p.active = false;
-    if (p.timer) { clearTimeout(p.timer); p.timer = null; }
-    const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
-    io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size });
-  });
-
-  socket.on('room:wheel-keyword', ({ code, keyword }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    lroom.wheel.keyword = keyword || 'اشتراك';
-    io.to(`liveroom:${lroom.code}`).emit('room:wheel-keyword', { keyword: lroom.wheel.keyword });
-  });
-
-  socket.on('room:wheel-open', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    lroom.wheel.accepting = true;
-    io.to(`liveroom:${lroom.code}`).emit('room:wheel-open', { keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size });
-  });
-
-  socket.on('room:wheel-close', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    lroom.wheel.accepting = false;
-    io.to(`liveroom:${lroom.code}`).emit('room:wheel-close', {});
-  });
-
-  socket.on('room:wheel-clear', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    lroom.wheel.entries.clear();
-    io.to(`liveroom:${lroom.code}`).emit('room:wheel-update', { entries: [], count: 0, fullSync: true });
-  });
-
-  socket.on('room:wheel-spin', ({ code, duration }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    const w = lroom.wheel;
-    if (w.entries.size < 2) return socket.emit('room:error', { message: 'يحتاج مشتركين أكثر' });
-    const entries = Array.from(w.entries.values());
-    const winnerIndex = Math.floor(Math.random() * entries.length);
-    const winner = entries[winnerIndex];
-    io.to(`liveroom:${lroom.code}`).emit('room:wheel-spin', { winner, winnerIndex, entries, duration: (duration || 5) * 1000 });
-  });
-
-  socket.on('room:quiz-start', ({ code, question, choices, correctIndex, timer }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    const q = lroom.quiz;
-    if (q.timer) clearTimeout(q.timer);
-    q.active = true; q.question = question || ''; q.choices = choices || [];
-    q.correctIndex = parseInt(correctIndex) ?? -1; q.answers = new Map(); q.winner = null;
-    const t = parseInt(timer) || 30;
-    q.endTime = Date.now() + t * 1000;
-    io.to(`liveroom:${lroom.code}`).emit('room:quiz-start', { question: q.question, choices: q.choices, timer: t, endTime: q.endTime });
-    q.timer = setTimeout(() => {
-      q.active = false;
-      const results = {}; q.choices.forEach((_, i) => results[i] = 0); q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
-      io.to(`liveroom:${lroom.code}`).emit('room:quiz-end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
-    }, t * 1000);
-  });
-
-  socket.on('room:quiz-stop', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    const q = lroom.quiz; q.active = false;
-    if (q.timer) { clearTimeout(q.timer); q.timer = null; }
-    const results = {}; q.choices.forEach((_, i) => results[i] = 0); q.answers.forEach(v => { if (results[v] !== undefined) results[v]++; });
-    io.to(`liveroom:${lroom.code}`).emit('room:quiz-end', { correctIndex: q.correctIndex, results, winner: q.winner, totalAnswers: q.answers.size });
-  });
-
-  socket.on('room:close', ({ code }) => {
-    const lroom = liveRooms.get((code || '').toUpperCase());
-    if (!lroom || !socket._isHost) return;
-    io.to(`liveroom:${lroom.code}`).emit('room:closed', { message: 'أغلق المضيف الغرفة' });
-    liveRooms.delete(lroom.code);
-    console.log(`[LiveRooms] Closed ${lroom.code}`);
-  });
-  // ─────────────────────────────────────────────────────
-});
-
-// ══════════════════════════════════════════════════════════
-// ── LIVE ROOMS (غرف تفاعلية بدون TikTok) ────────────────
-// ══════════════════════════════════════════════════════════
-const liveRooms = new Map();
-
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
-
-function createLiveRoom(hostName) {
-  let code;
-  do { code = generateRoomCode(); } while (liveRooms.has(code));
-  const room = {
-    code, hostName, hostSocketId: null, createdAt: Date.now(),
-    viewers: new Map(), chat: [],
-    poll: { active: false, question: '', options: [], votes: new Map(), endTime: 0, timer: null },
-    wheel: { entries: new Map(), accepting: false, keyword: 'اشتراك' },
-    quiz: { active: false, question: '', choices: [], correctIndex: -1, answers: new Map(), winner: null, endTime: 0, timer: null },
-  };
-  liveRooms.set(code, room);
-  return room;
-}
-
-function getRoomViewerList(room) {
-  return Array.from(room.viewers.values()).map(v => v.name);
-}
-
-// Auto-cleanup after 3 hours
-setInterval(() => {
-  const now = Date.now();
-  for (const [code, room] of liveRooms) {
-    if (now - room.createdAt > 3 * 60 * 60 * 1000) liveRooms.delete(code);
-  }
-}, 15 * 60 * 1000);
-
-app.post('/api/rooms/create', (req, res) => {
-  const hostName = (req.body.hostName || '').trim();
-  if (!hostName) return res.json({ ok: false, error: 'اسم المضيف مطلوب' });
-  const room = createLiveRoom(hostName);
-  console.log(`[LiveRooms] Created ${room.code} by ${hostName}`);
-  res.json({ ok: true, code: room.code, hostName });
-});
-
-app.get('/api/rooms/:code', (req, res) => {
-  const room = liveRooms.get(req.params.code.toUpperCase());
-  if (!room) return res.json({ ok: false, error: 'الغرفة غير موجودة' });
-  res.json({ ok: true, code: room.code, hostName: room.hostName, viewerCount: room.viewers.size, viewers: getRoomViewerList(room) });
-});
-
-app.get('/api/rooms/:code/wheel', (req, res) => {
-  const room = liveRooms.get(req.params.code.toUpperCase());
-  if (!room) return res.json({ ok: false });
-  const w = room.wheel;
-  res.json({ entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, keyword: w.keyword });
-});
-
-app.get('/api/rooms/:code/poll', (req, res) => {
-  const room = liveRooms.get(req.params.code.toUpperCase());
-  if (!room) return res.json({ ok: false });
-  const p = room.poll;
-  const results = {};
-  p.options.forEach((_, i) => results[i] = 0);
-  p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
-  res.json({ active: p.active, question: p.question, options: p.options, results, totalVotes: p.votes.size, endTime: p.endTime || 0 });
-});
-
-app.get('/api/rooms/:code/quiz', (req, res) => {
-  const room = liveRooms.get(req.params.code.toUpperCase());
-  if (!room) return res.json({ ok: false });
-  const q = room.quiz;
-  res.json({ active: q.active, question: q.question, choices: q.choices, endTime: q.endTime || 0, totalAnswers: q.answers.size });
+  socket.on('disconnect', () => { if (key) socket.leave(`room:${key}`); });
 });
 
 const PORT = process.env.PORT || 3000;
@@ -1239,6 +1250,200 @@ setInterval(() => {
     if (!loginAttempts[ip].length) delete loginAttempts[ip];
   });
 }, 60 * 60 * 1000);
+
+// ══════════════════════════════════════════════════════════
+// ── LIVE ROOMS (غرف تفاعلية بدون TikTok) ────────────────
+// ══════════════════════════════════════════════════════════
+const liveRooms = new Map();
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function createLiveRoom(hostName) {
+  let code;
+  do { code = generateRoomCode(); } while (liveRooms.has(code));
+  const room = {
+    code, hostName, hostSocketId: null, createdAt: Date.now(),
+    viewers: new Map(), chat: [],
+    poll: { active: false, question: '', options: [], votes: new Map(), endTime: 0, timer: null },
+    wheel: { entries: new Map(), accepting: false, keyword: 'اشتراك' },
+    quiz: { active: false, question: '', choices: [], correctIndex: -1, answers: new Map(), winner: null, endTime: 0, timer: null },
+    guess: { active: false, word: '', hint: '', revealed: [], winners: [], wordPool: [], timer: null },
+    knockout: { phase: 'idle', keyword: 'بطولة', maxPlayers: 16, players: new Map(), round: 0, currentQuestion: null },
+  };
+  liveRooms.set(code, room);
+  return room;
+}
+
+function getRoomViewerList(room) { return Array.from(room.viewers.values()).map(v => v.name); }
+
+// Auto-cleanup after 3 hours
+setInterval(() => { const now = Date.now(); for (const [code, room] of liveRooms) { if (now - room.createdAt > 3 * 60 * 60 * 1000) liveRooms.delete(code); } }, 15 * 60 * 1000);
+
+app.post('/api/live-rooms/create', (req, res) => {
+  const hostName = (req.body.hostName || '').trim();
+  if (!hostName) return res.json({ ok: false, error: 'اسم المضيف مطلوب' });
+  const room = createLiveRoom(hostName);
+  console.log(`[LiveRooms] Created ${room.code} by ${hostName}`);
+  res.json({ ok: true, code: room.code, hostName });
+});
+
+app.get('/api/live-rooms/:code', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false, error: 'الغرفة غير موجودة' });
+  res.json({ ok: true, code: room.code, hostName: room.hostName, viewerCount: room.viewers.size, viewers: getRoomViewerList(room) });
+});
+
+app.get('/api/live-rooms/:code/wheel', (req, res) => {
+  const room = liveRooms.get(req.params.code.toUpperCase());
+  if (!room) return res.json({ ok: false });
+  res.json({ entries: Array.from(room.wheel.entries.values()), count: room.wheel.entries.size, accepting: room.wheel.accepting, keyword: room.wheel.keyword });
+});
+
+// ── Live Rooms Socket Handlers ──
+io.on('connection', (socket) => {
+  socket.on('room:join', ({ code, name }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة أو انتهت' });
+    if (!name || !name.trim()) return socket.emit('room:error', { message: 'الاسم مطلوب' });
+    socket.rooms.forEach(r => { if (r.startsWith('liveroom:')) socket.leave(r); });
+    const viewerName = name.trim().substring(0, 30);
+    lroom.viewers.set(socket.id, { name: viewerName, joinedAt: Date.now() });
+    socket.join(`liveroom:${lroom.code}`);
+    socket._liveRoomCode = lroom.code;
+    socket._liveRoomName = viewerName;
+    socket.emit('room:joined', {
+      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size,
+      chatHistory: lroom.chat.slice(-30),
+      poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
+      wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
+      quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
+    });
+    io.to(`liveroom:${lroom.code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
+    io.to(`liveroom:${lroom.code}`).emit('room:activity', { type: 'join', name: viewerName });
+  });
+
+  socket.on('room:host', ({ code, hostName }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة' });
+    lroom.hostSocketId = socket.id;
+    socket.join(`liveroom:${lroom.code}`);
+    socket._liveRoomCode = lroom.code;
+    socket._isHost = true;
+    socket.emit('room:host-ok', { code: lroom.code, viewerCount: lroom.viewers.size });
+  });
+
+  socket.on('room:chat', ({ code, message }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !message || !message.trim()) return;
+    const name = socket._liveRoomName || (socket._isHost ? lroom.hostName : 'مجهول');
+    const msg = { name, message: message.trim().substring(0, 200), ts: Date.now() };
+    lroom.chat.push(msg);
+    if (lroom.chat.length > 100) lroom.chat.shift();
+    io.to(`liveroom:${lroom.code}`).emit('room:chat', msg);
+    // Wheel keyword check
+    const w = lroom.wheel;
+    if (w.accepting && w.keyword && msg.message.includes(w.keyword) && !w.entries.has(socket.id)) {
+      w.entries.set(socket.id, { userId: socket.id, name });
+      io.to(`liveroom:${lroom.code}`).emit('room:wheel-update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: { name } });
+    }
+    // Quiz answer
+    const q = lroom.quiz;
+    if (q.active && !q.answers.has(socket.id)) {
+      const num = parseInt(msg.message.trim());
+      if (num >= 1 && num <= q.choices.length) {
+        q.answers.set(socket.id, num - 1);
+        if (num - 1 === q.correctIndex && !q.winner) q.winner = { name };
+        io.to(`liveroom:${lroom.code}`).emit('room:quiz-answer', { totalAnswers: q.answers.size });
+      }
+    }
+    // Poll vote
+    const p = lroom.poll;
+    if (p.active && !p.votes.has(socket.id)) {
+      const num = parseInt(msg.message.trim());
+      if (num >= 1 && num <= p.options.length) {
+        p.votes.set(socket.id, num - 1);
+        const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+        io.to(`liveroom:${lroom.code}`).emit('room:poll-vote', { results, totalVotes: p.votes.size });
+      }
+    }
+    // Guess answer
+    const g = lroom.guess;
+    if (g.active && g.word && (msg.message.trim() === g.word) && !g.winners.find(ww => ww.socketId === socket.id)) {
+      g.winners.push({ socketId: socket.id, name, rank: g.winners.length + 1 });
+      io.to(`liveroom:${lroom.code}`).emit('room:guess-won', { winner: { name, rank: g.winners.length }, winners: g.winners });
+    }
+    // Knockout join
+    const ko = lroom.knockout;
+    if (ko.phase === 'register' && msg.message.includes(ko.keyword) && !ko.players.has(socket.id) && ko.players.size < ko.maxPlayers) {
+      ko.players.set(socket.id, { name, alive: true });
+      io.to(`liveroom:${lroom.code}`).emit('room:knockout-joined', { count: ko.players.size, max: ko.maxPlayers });
+    }
+    // Knockout answer
+    if (ko.phase === 'question' && ko.currentQuestion) {
+      const pp = ko.players.get(socket.id);
+      if (pp && pp.alive && !ko.currentQuestion.answers.has(socket.id)) {
+        const num = parseInt(msg.message.trim());
+        if (num >= 1 && num <= ko.currentQuestion.options.length) {
+          ko.currentQuestion.answers.set(socket.id, num - 1);
+          io.to(`liveroom:${lroom.code}`).emit('room:knockout-answered', { count: ko.currentQuestion.answers.size, total: Array.from(ko.players.values()).filter(pp2 => pp2.alive).length });
+        }
+      }
+    }
+  });
+
+  // Room host controls
+  socket.on('room:poll-start', ({ code, question, options, timer }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom || !socket._isHost) return;
+    const p = lroom.poll;
+    if (p.timer) clearTimeout(p.timer);
+    p.active = true; p.question = question || ''; p.options = options || []; p.votes = new Map();
+    const t = parseInt(timer) || 60;
+    p.endTime = Date.now() + t * 1000;
+    io.to(`liveroom:${lroom.code}`).emit('room:poll-start', { question: p.question, options: p.options, timer: t, endTime: p.endTime });
+    p.timer = setTimeout(() => { p.active = false; const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; }); io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size }); }, t * 1000);
+  });
+  socket.on('room:poll-stop', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    const p = lroom.poll; p.active = false; if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+    const results = {}; p.options.forEach((_, i) => results[i] = 0); p.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
+    io.to(`liveroom:${lroom.code}`).emit('room:poll-end', { results, totalVotes: p.votes.size });
+  });
+  socket.on('room:wheel-keyword', ({ code, keyword }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.keyword=keyword||'اشتراك'; io.to(`liveroom:${lr.code}`).emit('room:wheel-keyword',{keyword:lr.wheel.keyword}); }});
+  socket.on('room:wheel-open', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=true; io.to(`liveroom:${lr.code}`).emit('room:wheel-open',{keyword:lr.wheel.keyword,count:lr.wheel.entries.size}); }});
+  socket.on('room:wheel-close', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=false; io.to(`liveroom:${lr.code}`).emit('room:wheel-close',{}); }});
+  socket.on('room:wheel-clear', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.entries.clear(); io.to(`liveroom:${lr.code}`).emit('room:wheel-update',{entries:[],count:0,fullSync:true}); }});
+  socket.on('room:wheel-spin', ({ code, duration }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(!lr||!socket._isHost) return; const w=lr.wheel; if(w.entries.size<2) return socket.emit('room:error',{message:'يحتاج مشتركين أكثر'}); const entries=Array.from(w.entries.values()); const wi=Math.floor(Math.random()*entries.length); io.to(`liveroom:${lr.code}`).emit('room:wheel-spin',{winner:entries[wi],winnerIndex:wi,entries,duration:(duration||5)*1000}); });
+  socket.on('room:quiz-start', ({ code, question, choices, correctIndex, timer }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(!lr||!socket._isHost) return; const q=lr.quiz; if(q.timer)clearTimeout(q.timer); q.active=true;q.question=question||'';q.choices=choices||[];q.correctIndex=parseInt(correctIndex)??-1;q.answers=new Map();q.winner=null; const t=parseInt(timer)||30;q.endTime=Date.now()+t*1000; io.to(`liveroom:${lr.code}`).emit('room:quiz-start',{question:q.question,choices:q.choices,timer:t,endTime:q.endTime}); q.timer=setTimeout(()=>{q.active=false;const r={};q.choices.forEach((_,i)=>r[i]=0);q.answers.forEach(v=>{if(r[v]!==undefined)r[v]++;});io.to(`liveroom:${lr.code}`).emit('room:quiz-end',{correctIndex:q.correctIndex,results:r,winner:q.winner,totalAnswers:q.answers.size});},t*1000); });
+  socket.on('room:quiz-stop', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(!lr||!socket._isHost) return; const q=lr.quiz;q.active=false;if(q.timer){clearTimeout(q.timer);q.timer=null;} const r={};q.choices.forEach((_,i)=>r[i]=0);q.answers.forEach(v=>{if(r[v]!==undefined)r[v]++;}); io.to(`liveroom:${lr.code}`).emit('room:quiz-end',{correctIndex:q.correctIndex,results:r,winner:q.winner,totalAnswers:q.answers.size}); });
+  socket.on('room:guess-start', ({ code, word, hint }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const g=lr.guess;g.active=true;g.word=word||'';g.hint=hint||'';g.revealed=g.word.length>=2?[0,g.word.length-1]:[];g.winners=[]; io.to(`liveroom:${lr.code}`).emit('room:guess-started',{length:g.word.length,hint:g.hint,letters:g.revealed.map(i=>({i,c:g.word[i]})),winners:[]}); });
+  socket.on('room:guess-stop', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return;lr.guess.active=false; io.to(`liveroom:${lr.code}`).emit('room:guess-stopped',{}); });
+  socket.on('room:guess-reveal', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; io.to(`liveroom:${lr.code}`).emit('room:guess-reveal',{word:lr.guess.word}); });
+  socket.on('room:knockout-register', ({ code, keyword, maxPlayers }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ko=lr.knockout;ko.phase='register';ko.keyword=keyword||'بطولة';ko.maxPlayers=parseInt(maxPlayers)||16;ko.players=new Map();ko.round=0;ko.currentQuestion=null; io.to(`liveroom:${lr.code}`).emit('room:knockout-register',{keyword:ko.keyword,maxPlayers:ko.maxPlayers}); });
+  socket.on('room:knockout-lock', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return;lr.knockout.phase='locked'; io.to(`liveroom:${lr.code}`).emit('room:knockout-locked',{count:lr.knockout.players.size,players:Array.from(lr.knockout.players.values())}); });
+  socket.on('room:knockout-ask', ({ code, question, options, correct, answerTime }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ko=lr.knockout;ko.phase='question';ko.round++;ko.currentQuestion={question,options,correct:parseInt(correct),answerTime:parseInt(answerTime)||15,answers:new Map()}; const alive=Array.from(ko.players.values()).filter(p=>p.alive).length; io.to(`liveroom:${lr.code}`).emit('room:knockout-question',{question,options:options||[],round:ko.round,alivePlayers:alive,answerTime:ko.currentQuestion.answerTime}); });
+  socket.on('room:knockout-reveal', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ko=lr.knockout;const q=ko.currentQuestion;if(!q)return; const elim=[];ko.players.forEach((p,sid)=>{if(!p.alive)return;if(q.answers.get(sid)!==q.correct){p.alive=false;elim.push({name:p.name});}}); const alive=Array.from(ko.players.values()).filter(p=>p.alive); const winner=alive.length<=1?(alive[0]?{name:alive[0].name}:null):null; io.to(`liveroom:${lr.code}`).emit('room:knockout-reveal',{correct:q.correct,eliminated:elim,aliveCount:alive.length,winner}); });
+  socket.on('room:knockout-stop', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return;lr.knockout.phase='idle'; io.to(`liveroom:${lr.code}`).emit('room:knockout-stopped',{}); });
+  socket.on('room:close', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; io.to(`liveroom:${lr.code}`).emit('room:closed',{message:'أغلق المضيف الغرفة'});liveRooms.delete(lr.code); });
+
+  // Cleanup on disconnect
+  const origDisconnect = socket._events?.disconnect;
+  socket.on('disconnect', () => {
+    const code = socket._liveRoomCode;
+    if (code) {
+      const lroom = liveRooms.get(code);
+      if (lroom) {
+        lroom.viewers.delete(socket.id);
+        io.to(`liveroom:${code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
+      }
+    }
+  });
+});
 
 httpServer.listen(PORT, () => console.log(`\n🎯 BthLab running at http://localhost:${PORT}\n`));
 
