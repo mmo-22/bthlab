@@ -880,8 +880,9 @@ app.get('/api/knockout/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const ko = getKnockout(key);
   const players = Array.from(ko.players.values());
-  const alive = players.filter(p => p.alive).length;
-  res.json({ phase: ko.phase, round: ko.round, playerCount: ko.players.size, aliveCount: alive, players });
+  const alive = players.filter(p => p.alive);
+  const eliminated = players.filter(p => !p.alive);
+  res.json({ phase: ko.phase, round: ko.round, totalPlayers: ko.players.size, aliveCount: alive.length, players, eliminated, alive });
 });
 
 // ══════════════════════════════════════════════════════════
