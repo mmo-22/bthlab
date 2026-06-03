@@ -139,7 +139,7 @@ app.post('/api/recover-key', (req, res) => {
   const [key, sub] = found;
   sendEmail(email, '[BthLab] مفتاح اشتراكك',
     `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px;text-align:center">
-      <h2 style="color:#25f4ee">🔑 مفتاح اشتراكك</h2>
+      <h2 style="color:#0891b2">🔑 مفتاح اشتراكك</h2>
       <p style="font-size:14px">مرحباً ${sub.name || ''},</p>
       <div style="margin:20px 0;padding:16px;background:#f5f5f5;border-radius:12px;font-family:monospace;font-size:20px;font-weight:bold;letter-spacing:2px">${key}</div>
       <p style="font-size:12px;color:#888">ادخل هذا المفتاح في صفحة تسجيل الدخول</p>
@@ -236,13 +236,13 @@ app.post('/api/contact', (req, res) => {
   // Send email notification
   sendEmail(SUPPORT_EMAIL, `[BthLab Support] ${msg.subject}`,
     `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px">
-      <h2 style="color:#25f4ee">📩 رسالة جديدة من الدعم</h2>
+      <h2 style="color:#0891b2">📩 رسالة جديدة من الدعم</h2>
       <table style="width:100%;border-collapse:collapse;font-size:14px">
         <tr><td style="padding:8px;font-weight:bold;color:#888">الاسم:</td><td style="padding:8px">${msg.name}</td></tr>
         <tr><td style="padding:8px;font-weight:bold;color:#888">الإيميل:</td><td style="padding:8px">${msg.email || '—'}</td></tr>
         <tr><td style="padding:8px;font-weight:bold;color:#888">المفتاح:</td><td style="padding:8px;font-family:monospace">${msg.key || '—'}</td></tr>
         <tr><td style="padding:8px;font-weight:bold;color:#888">التيك توك:</td><td style="padding:8px">@${msg.tiktokUsername || '—'}</td></tr>
-        <tr><td style="padding:8px;font-weight:bold;color:#888">الموضوع:</td><td style="padding:8px;color:#25f4ee">${msg.subject}</td></tr>
+        <tr><td style="padding:8px;font-weight:bold;color:#888">الموضوع:</td><td style="padding:8px;color:#0891b2">${msg.subject}</td></tr>
       </table>
       <div style="background:#f5f5f5;border-radius:10px;padding:16px;margin-top:12px;font-size:14px;line-height:1.8">${msg.message}</div>
     </div>`
