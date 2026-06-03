@@ -23,7 +23,7 @@ body.mobile{transform:scale(0.55);transform-origin:center center;}
 .choice.correct .choice-num { background:#1dba72; }
 .choice.wrong { opacity:.5; }
 .timer-bar { height:4px; background:rgba(255,255,255,.1); border-radius:2px; margin-top:12px; overflow:hidden; }
-.timer-fill { height:100%; background:#25f4ee; transition:width .2s linear; }
+.timer-fill { height:100%; background:#0891b2; transition:width .2s linear; }
 .count-bar { text-align:center; font-size:12px; color:rgba(255,255,255,.5); margin-top:8px; }
 #winner-bar { display:none; text-align:center; padding:10px; margin-top:8px; background:rgba(255,215,0,.15); border-radius:10px; color:#ffd700; font-weight:900; font-size:16px; }
 </style>
@@ -79,7 +79,7 @@ socket.on('quiz:end', (data) => {
   if (timerInterval) clearInterval(timerInterval);
   document.getElementById('timer-fill').style.width = '0%';
   const total = data.totalAnswers || 1;
-  const colors = ['#ff0050','#25f4ee','#ffd700','#1dba72'];
+  const colors = ['#ff0050','#0891b2','#ffd700','#1dba72'];
   choicesData.forEach((c, i) => {
     const el = document.getElementById('choice-' + i);
     if (!el) return;

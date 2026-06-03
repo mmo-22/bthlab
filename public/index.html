@@ -14,7 +14,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#25f4ee;--text:#f0f0f5;--muted:#555;--green:#00e676}
+:root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#0891b2;--text:#f0f0f5;--muted:#555;--green:#00e676}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:80px}
 body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min-height:100vh;overflow-x:hidden}
@@ -32,9 +32,9 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .nav-btn{padding:8px 20px;background:var(--accent2);color:#000;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none}
 .hero{text-align:center;padding:50px 20px 40px}
 .hero-badge{display:inline-block;padding:6px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:99px;font-size:12px;color:var(--accent2);margin-bottom:20px}
-.hero h1{font-size:clamp(32px,6vw,48px);font-weight:900;line-height:1.1;margin-bottom:16px}
+.hero h1{font-size:clamp(32px,6vw,48px);font-weight:900;line-height:1.6;margin-bottom:16px}
 .hero h1 span{background:linear-gradient(135deg,var(--accent2),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero p{font-size:16px;color:var(--muted);max-width:500px;margin:0 auto 28px;line-height:1.1}
+.hero p{font-size:16px;color:var(--muted);max-width:500px;margin:0 auto 28px;line-height:1.7}
 .hero-cta{display:inline-flex;gap:10px;align-items:center;padding:14px 32px;background:var(--accent2);color:#000;border-radius:12px;font-size:16px;font-weight:700;text-decoration:none;transition:all .15s}
 .hero-cta:hover{opacity:.85;transform:translateY(-1px)}
 .marquee-wrap{overflow:hidden;margin:24px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
@@ -76,13 +76,19 @@ body{background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;min
 .faq-a{padding:0 18px 16px;font-size:13px;color:var(--muted);line-height:1.7;display:none}
 .faq-item.open .faq-a{display:block}
 .faq-item.open .toggle{transform:rotate(45deg)}
-.footer{text-align:center;padding:24px 20px;border-top:1px solid var(--border)}
-.footer-logo{font-size:16px;font-weight:900;margin-bottom:6px}
+.footer{text-align:center;padding:40px 20px 24px;border-top:1px solid var(--border)}
+.footer-logo{font-size:18px;font-weight:900;margin-bottom:12px}
 .footer-logo span{color:var(--accent2)}
-.footer-text{font-size:11px;color:var(--muted);line-height:1.8}
-.footer-links{display:flex;justify-content:center;gap:16px;margin-top:8px;flex-wrap:wrap}
-.footer-links a{color:var(--muted);font-size:11px;text-decoration:none;transition:color .15s}
+.footer-contact{display:flex;justify-content:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.footer-social{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+.footer-social a{color:var(--muted);font-size:12px;text-decoration:none;padding:5px 12px;border:1px solid var(--border);border-radius:8px;transition:all .15s}
+.footer-social a:hover{color:var(--accent2);border-color:var(--accent2)}
+.footer-links{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:11px}
+.footer-links a{color:var(--muted);text-decoration:none;transition:color .15s}
 .footer-links a:hover{color:var(--accent2)}
+.footer-sep{color:rgba(255,255,255,.12)}
+.footer-time{font-size:10px;color:var(--muted);margin:10px 0}
+.footer-copy{font-size:11px;color:var(--muted);margin-top:10px}
 body.light{--bg:#f5f5f7;--surface:rgba(0,0,0,.03);--surface2:rgba(0,0,0,.05);--border:rgba(0,0,0,.08);--text:#1a1a2e;--muted:#888;--accent:#ff0050;--accent2:#0891b2;--green:#16a34a}
 body.light .navbar{background:rgba(245,245,247,.9)}
 body.light .hero h1 span{background:linear-gradient(135deg,#0891b2,#e11d48);-webkit-background-clip:text;background-clip:text}
@@ -95,9 +101,9 @@ body.light .price-num{color:var(--text)}
 body.light .price-unit{color:var(--muted)}
 body.light .trust-row{color:var(--muted)}
 body.light .price-cta{background:#0891b2}
-.theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100;width:40px;height:40px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.theme-toggle{position:fixed;top:18px;left:20px;z-index:100;width:36px;height:36px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s;box-shadow:0 2px 10px rgba(0,0,0,.15)}
 .theme-toggle:hover{transform:scale(1.1)}
-@media(max-width:480px){.nav-links .nav-link{display:none}.feature-grid{grid-template-columns:1fr}.price-features{grid-template-columns:1fr}.footer-links{flex-direction:column;align-items:center;gap:8px}}
+@media(max-width:480px){.nav-links .nav-link{display:none}.feature-grid{grid-template-columns:1fr}.price-features{grid-template-columns:1fr}.footer-contact{flex-direction:column;gap:6px}}
 </style>
 </head>
 <body>
@@ -168,7 +174,7 @@ body.light .price-cta{background:#0891b2}
 </section>
 
 <section class="section" id="faq">
-  <div class="section-header"><h2><span>الأسئلة الشائعة</span> ❓</h2></div>
+  <div class="section-header"><h2><span>الأسئلة الشائعة</span></h2></div>
   <div class="faq-list">
     <div class="faq-item"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">هل أحتاج خبرة تقنية؟<span class="toggle">+</span></div><div class="faq-a">أبداً. سجل دخول، اكتب يوزرنيمك، انسخ رابط الـ Overlay وحطه في OBS. ما فيه أي برمجة.</div></div>
     <div class="faq-item"><div class="faq-q" onclick="this.parentElement.classList.toggle('open')">هل يشتغل على أي بث تيك توك؟<span class="toggle">+</span></div><div class="faq-a">نعم، يشتغل على أي بث مباشر. تكتب يوزرنيمك والسيرفر يتصل تلقائياً.</div></div>
@@ -180,23 +186,30 @@ body.light .price-cta{background:#0891b2}
 </div>
 
 <footer class="footer">
-  <div class="footer-logo"><img src="/logo.svg" alt="BthLab" style="height:22px;vertical-align:middle;margin-left:4px"> <span>BthLab</span></div>
-  <div class="footer-text">مختبر البث — أدوات تفاعلية للبث المباشر<br>© 2026 BthLab. جميع الحقوق محفوظة.</div>
-  <div style="display:flex;justify-content:center;gap:16px;margin:12px 0;flex-wrap:wrap;font-size:12px;color:var(--muted)">
-    <span>📞 +966 55 260 8556</span>
-    <span>📧 support@bthlab.live</span>
-  </div>
-  <div style="font-size:10px;color:var(--muted);margin:8px 0">⏱ وقت الرد: خلال 24 ساعة | معالجة الشكاوى: خلال 3 أيام عمل</div>
+  <div class="footer-logo"><img src="/logo.svg" alt="BthLab" style="height:22px;vertical-align:middle;margin-left:4px"> <span>BthLab</span> · مختبر البث</div>
+
   <div class="footer-links">
-    <a href="/login.html">تسجيل الدخول</a>
-    <a href="#pricing">الأسعار</a>
-    <a href="#faq">الأسئلة الشائعة</a>
-    <a href="/contact.html">تواصل معنا</a>
-    <a href="/policies.html">شروط الاستخدام</a>
+    <a href="#features">المميزات</a><span class="footer-sep">|</span>
+    <a href="#pricing">الأسعار</a><span class="footer-sep">|</span>
     <a href="/about.html">من نحن</a>
-    <a href="/policies.html#refund">سياسة الاسترجاع</a>
+  </div>
+  <div class="footer-links">
+    <a href="/contact.html">تواصل معنا</a><span class="footer-sep">|</span>
+    <a href="/policies.html">الشروط</a><span class="footer-sep">|</span>
     <a href="/policies.html#privacy">الخصوصية</a>
   </div>
+
+  <div class="footer-contact">
+    <span>📞 <span dir="ltr">+966 55 260 8556</span></span>
+    <span>📧 support@bthlab.live</span>
+  </div>
+
+  <div class="footer-social">
+    <a href="https://x.com/bthlab_live" target="_blank">𝕏</a>
+    <a href="https://tiktok.com/@bthlab.live" target="_blank">TikTok</a>
+  </div>
+
+  <div class="footer-copy">© 2026 BthLab · صنع بحب في الرياض</div>
 </footer>
 </div>
 

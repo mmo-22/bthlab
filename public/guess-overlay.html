@@ -45,7 +45,7 @@
     font-size:calc(26px * var(--scale)); font-weight:900;
     transition:all .3s;
   }
-  .lbox.shown { background:rgba(37,244,238,.18); border:2px solid rgba(37,244,238,.55); color:#25f4ee; }
+  .lbox.shown { background:rgba(37,244,238,.18); border:2px solid rgba(37,244,238,.55); color:#0891b2; }
   .lbox.hidden { background:rgba(255,255,255,.05); border:2px dashed rgba(255,255,255,.2); }
   .lbox.revealed {
     background:rgba(29,186,114,.25);
@@ -91,7 +91,7 @@
     max-width:calc(90px * var(--scale));
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
   }
-  .lb-count { font-size:calc(11px * var(--scale)); color:#25f4ee; font-weight:700; background:rgba(37,244,238,.12); padding:2px 8px; border-radius:20px; }
+  .lb-count { font-size:calc(11px * var(--scale)); color:#0891b2; font-weight:700; background:rgba(37,244,238,.12); padding:2px 8px; border-radius:20px; }
   .lb-empty-name { font-size:calc(11px * var(--scale)); color:rgba(255,255,255,.2); }
 
   /* Confetti */
@@ -188,7 +188,7 @@
     line-height:1.2;
   }
   .top5-score {
-    font-size:calc(16px * var(--scale)); font-weight:900; color:#25f4ee;
+    font-size:calc(16px * var(--scale)); font-weight:900; color:#0891b2;
     background:rgba(37,244,238,.15); padding:3px calc(12px * var(--scale));
     border-radius:20px;
   }
@@ -366,7 +366,7 @@ function showNewWinner(winner) {
 function fireConfetti() {
   const layer = document.getElementById('confetti-layer');
   const box   = document.getElementById('main-box');
-  const colors = ['#ffd700','#ff0050','#25f4ee','#1dba72','#a78bfa','#f59e0b'];
+  const colors = ['#ffd700','#ff0050','#0891b2','#1dba72','#a78bfa','#f59e0b'];
   const cx = box.offsetWidth / 2;
   const cy = box.offsetHeight / 2;
   for (let i = 0; i < 28; i++) {

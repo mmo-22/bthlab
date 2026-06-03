@@ -30,7 +30,7 @@
   .stats-bar.side-left  { left: 0; }
   .stat-item { display: flex; align-items: center; gap: 5px; }
   .stat-item .label { color: #aaa; font-size: 0.85em; }
-  .stat-item.viewers strong { color: #25f4ee; }
+  .stat-item.viewers strong { color: #0891b2; }
   .stat-item.likes   strong { color: #ff6b6b; }
   .stat-item.diamonds strong { color: #ffd700; }
   .stat-item.shares   strong { color: #a78bfa; }
@@ -74,20 +74,20 @@
     direction: ltr; text-align: left;
   }
   .msg-user {
-    font-weight: 700; color: #25f4ee; display: inline;
+    font-weight: 700; color: #0891b2; display: inline;
     direction: ltr; unicode-bidi: embed;
   }
   .msg-user.mod { color: #ff0050; }
   .msg-sep { color: rgba(255,255,255,0.35); margin: 0 4px; }
   .msg-text { display: inline; line-height: 1.5; }
   .event-msg .msg-bubble { background: rgba(37,244,238,0.1); border: 1px solid rgba(37,244,238,0.2); }
-  .event-msg .msg-text   { color: #25f4ee !important; }
+  .event-msg .msg-text   { color: #0891b2 !important; }
   .follow-msg .msg-bubble { background: rgba(29,186,114,0.1); border: 1px solid rgba(29,186,114,0.2); }
   .follow-msg .msg-text  { color: var(--follow-color, #1dba72) !important; }
   .share-msg .msg-bubble { background: rgba(165,122,250,0.1); border: 1px solid rgba(165,122,250,0.2); }
   .share-msg .msg-text   { color: var(--share-color, #a57afa) !important; }
   .join-msg .msg-bubble  { background: rgba(37,244,238,0.1); border: 1px solid rgba(37,244,238,0.2); }
-  .join-msg .msg-text    { color: var(--join-color, #25f4ee) !important; }
+  .join-msg .msg-text    { color: var(--join-color, #0891b2) !important; }
   .gift-msg { flex-direction: row-reverse; }
   .gift-msg  .msg-user   { color: #ffd700 !important; }
   .gift-msg  .msg-text   { color: #ffd700 !important; }
@@ -157,7 +157,7 @@ const cfg = {
   fontColor:     p.get('fontColor')     || '#ffffff',
   fontSize:      p.get('fontSize')      || '1em',
   fontFamily:    p.get('fontFamily')    || 'Tajawal',
-  usernameColor: p.get('usernameColor') || '#25f4ee',
+  usernameColor: p.get('usernameColor') || '#0891b2',
   bubbleBg:      p.get('bubbleBg')      || 'rgba(0,0,0,0.55)',
   direction:     p.get('dir')           || 'rtl',
   maxMsgs:       parseInt(p.get('max') || '30'),
@@ -185,7 +185,7 @@ const cfg = {
   volDonation:   p.get('volDonation'),
   followColor:   p.get('followColor')   || '#1dba72',
   shareColor:    p.get('shareColor')    || '#a57afa',
-  joinColor:     p.get('joinColor')     || '#25f4ee',
+  joinColor:     p.get('joinColor')     || '#0891b2',
 };
 
 // Apply global styles

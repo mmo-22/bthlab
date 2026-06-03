@@ -21,7 +21,7 @@ body.mobile{transform:scale(0.55);transform-origin:center center;}
 .opt-label { font-size:13px; font-weight:700; color:#fff; white-space:nowrap; }
 .opt-pct { font-size:12px; font-weight:700; color:rgba(255,255,255,.7); min-width:36px; text-align:left; flex-shrink:0; }
 .timer-bar { height:3px; background:rgba(255,255,255,.1); border-radius:2px; margin-top:10px; overflow:hidden; }
-.timer-fill { height:100%; background:#25f4ee; transition:width .2s linear; }
+.timer-fill { height:100%; background:#0891b2; transition:width .2s linear; }
 .vote-count { text-align:center; font-size:11px; color:rgba(255,255,255,.4); margin-top:6px; }
 #end-banner { display:none; text-align:center; margin-top:8px; padding:8px; background:rgba(255,215,0,.12); border-radius:8px; color:#ffd700; font-size:14px; font-weight:700; }
 </style>
@@ -46,7 +46,7 @@ let timerInterval = null;
 let endTime = 0;
 let totalTime = 60;
 let optionsData = [];
-const colors = ['#ff0050','#25f4ee','#ffd700','#1dba72','#a57afa','#f59e0b'];
+const colors = ['#ff0050','#0891b2','#ffd700','#1dba72','#a57afa','#f59e0b'];
 
 if (!username && authKey) {
   fetch('/api/resolve-key?key='+encodeURIComponent(authKey)).then(r=>r.json()).then(d=>{

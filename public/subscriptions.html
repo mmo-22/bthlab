@@ -7,7 +7,7 @@
 <title>إدارة الاشتراكات — BthLab</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#25f4ee; --text:#f0f0f5; --muted:#666; --green:#1dba72; --red:#ef4444; }
+  :root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#0891b2; --text:#f0f0f5; --muted:#666; --green:#1dba72; --red:#ef4444; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; padding:20px; }
   .container { max-width:800px; margin:0 auto; }
@@ -104,7 +104,7 @@ function renderSubs(list) {
         <div class="sub-info">
           <div class="sub-name">${esc(s.name || '—')}</div>
           <div class="sub-email">${esc(s.email || '—')}</div>
-          <div style="font-size:11px;color:#25f4ee;margin-top:2px">🎮 @${esc(s.tiktokUsername || '—')}</div>
+          <div style="font-size:11px;color:#0891b2;margin-top:2px">🎮 @${esc(s.tiktokUsername || '—')}</div>
           <div class="sub-dates">إنشاء: ${new Date(s.createdAt).toLocaleDateString('ar-SA')} | انتهاء: ${new Date(s.expiresAt).toLocaleDateString('ar-SA')}</div>
         </div>
         <span class="sub-status ${statusCls}">${statusText}</span>
