@@ -41,10 +41,10 @@ async function sendEmail(to, subject, html) {
 // ══════════════════════════════════════════════════════════
 // ── Config ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const MOYASAR_PK = process.env.MOYASAR_PK || 'pk_test_K1YdX6c5X1vYvCByHN77jSxHkJikW9LvAnGmkcaM';
-const MOYASAR_SK = process.env.MOYASAR_SK || 'sk_test_57sx5mBRNQHoAu';
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'admin2024';
-const SUBSCRIPTION_PRICE = parseInt(process.env.SUBSCRIPTION_PRICE || '8000');
+const STREAM_API_KEY = process.env.STREAM_API_KEY || 'NjRmNDYzNTgtMjhjYi00MmNmLTlkNWUtN2FmZjQxMDhlM2QzOjliYTE1ZmJmLWI1ZGEtNGYxZS04MmYxLWY0ZmMxZGQ1ZmQ1NA==';
+const STREAM_PRODUCT_ID = process.env.STREAM_PRODUCT_ID || '228d203d-e530-40c4-8665-5724c7174d4e';
+const STREAM_API_BASE = 'https://stream-app-service.streampay.sa/api/v2';
 
 // Use RAILWAY_VOLUME_MOUNT_PATH if available (persistent), otherwise fallback to local
 const PERSIST_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '../data');
@@ -62,38 +62,101 @@ let subscribers = loadSubscribers();
 
 function generateKey() { return 'TLR-' + crypto.randomBytes(4).toString('hex').toUpperCase(); }
 
-async function verifyPayment(paymentId) {
-  const auth = Buffer.from(MOYASAR_SK + ':').toString('base64');
-  const res = await fetch(`https://api.moyasar.com/v1/payments/${paymentId}`, {
-    headers: { 'Authorization': `Basic ${auth}` },
+// StreamPay API helper
+async function streamAPI(method, endpoint, body) {
+  const res = await fetch(`${STREAM_API_BASE}${endpoint}`, {
+    method,
+    headers: { 'x-api-key': STREAM_API_KEY, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();
 }
 
-// ── Subscription API ─────────────────────────────────────
+// ── Subscription API (StreamPay) ─────────────────────────
 
-// Config endpoint for frontend
-app.get('/api/config', (req, res) => {
-  res.json({ publishableKey: MOYASAR_PK, price: SUBSCRIPTION_PRICE });
-});
-
-app.post('/api/subscribe', async (req, res) => {
-  const { paymentId, email, name, tiktokUsername } = req.body;
-  if (!paymentId) return res.json({ ok: false, error: 'معرف الدفع مطلوب' });
+// Create payment link — user clicks "subscribe" → gets redirect URL
+app.post('/api/create-payment', async (req, res) => {
+  const { name, email, tiktokUsername } = req.body;
+  if (!name || !name.trim()) return res.json({ ok: false, error: 'الاسم مطلوب' });
+  if (!email || !email.trim()) return res.json({ ok: false, error: 'الإيميل مطلوب' });
   if (!tiktokUsername || !tiktokUsername.trim()) return res.json({ ok: false, error: 'يوزرنيم التيك توك مطلوب' });
   try {
-    const payment = await verifyPayment(paymentId);
-    if (payment.status !== 'paid') return res.json({ ok: false, error: 'الدفع لم يكتمل' });
-    if (payment.amount !== SUBSCRIPTION_PRICE) return res.json({ ok: false, error: 'المبلغ غير صحيح' });
-    const existing = Object.entries(subscribers).find(([k, v]) => v.paymentId === paymentId);
+    // Create consumer in StreamPay
+    const consumer = await streamAPI('POST', '/consumers', {
+      name: name.trim(),
+      email: email.trim(),
+      communication_methods: ['EMAIL'],
+    });
+    const consumerId = consumer.id;
+    if (!consumerId) {
+      // Consumer might already exist — try without creating
+      console.log('[StreamPay] Consumer creation response:', JSON.stringify(consumer));
+    }
+    // Create payment link
+    const origin = req.headers.origin || req.headers.referer?.replace(/\/[^\/]*$/, '') || 'https://bthlab.live';
+    const paymentLink = await streamAPI('POST', '/payment_links', {
+      name: 'اشتراك BthLab الشهري',
+      description: 'اشتراك شهري في مختبر البث — 80 ريال',
+      items: [{ product_id: STREAM_PRODUCT_ID, quantity: 1 }],
+      contact_information_type: 'EMAIL',
+      currency: 'SAR',
+      max_number_of_payments: 1,
+      organization_consumer_id: consumerId || undefined,
+      success_redirect_url: `${origin}/payment-callback.html?tiktokUsername=${encodeURIComponent(tiktokUsername)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`,
+      failure_redirect_url: `${origin}/payment-callback.html?status=failed`,
+      custom_metadata: { tiktokUsername: tiktokUsername.trim(), email: email.trim(), name: name.trim() },
+    });
+    if (paymentLink.url) {
+      console.log(`[StreamPay] Payment link created for ${email}: ${paymentLink.url}`);
+      res.json({ ok: true, url: paymentLink.url });
+    } else {
+      console.error('[StreamPay] Error:', JSON.stringify(paymentLink));
+      res.json({ ok: false, error: 'خطأ في إنشاء رابط الدفع' });
+    }
+  } catch(e) { console.error('[StreamPay] Error:', e); res.json({ ok: false, error: 'خطأ في الاتصال بنظام الدفع' }); }
+});
+
+// Verify payment after redirect — called by payment-callback.html
+app.post('/api/subscribe', async (req, res) => {
+  const { invoiceId, paymentId, email, name, tiktokUsername } = req.body;
+  if (!invoiceId && !paymentId) return res.json({ ok: false, error: 'معرف الدفع مطلوب' });
+  if (!tiktokUsername || !tiktokUsername.trim()) return res.json({ ok: false, error: 'يوزرنيم التيك توك مطلوب' });
+  try {
+    // Check if already subscribed with this payment
+    const existing = Object.entries(subscribers).find(([k, v]) => v.paymentId === (invoiceId || paymentId));
     if (existing) return res.json({ ok: true, key: existing[0] });
+    // Verify payment with StreamPay
+    let verified = false;
+    if (invoiceId) {
+      const invoice = await streamAPI('GET', `/invoices/${invoiceId}`);
+      verified = invoice.status === 'paid' || invoice.status === 'PAID';
+      if (!verified) console.log('[StreamPay] Invoice status:', invoice.status);
+    }
+    if (!verified && paymentId) {
+      const payment = await streamAPI('GET', `/payments/${paymentId}`);
+      verified = payment.status === 'paid' || payment.status === 'PAID' || payment.status === 'succeeded';
+      if (!verified) console.log('[StreamPay] Payment status:', payment.status);
+    }
+    if (!verified) return res.json({ ok: false, error: 'الدفع لم يكتمل' });
     const key = generateKey();
     const now = new Date();
     const expires = new Date(now); expires.setDate(expires.getDate() + 30);
     const cleanUsername = tiktokUsername.toLowerCase().replace('@', '').trim();
-    subscribers[key] = { email: email||'', name: name||'', tiktokUsername: cleanUsername, paymentId, createdAt: now.toISOString(), expiresAt: expires.toISOString(), active: true };
+    subscribers[key] = { email: email||'', name: name||'', tiktokUsername: cleanUsername, paymentId: invoiceId || paymentId, createdAt: now.toISOString(), expiresAt: expires.toISOString(), active: true };
     saveSubscribers(subscribers);
     console.log(`[Subscribe] New: ${key} (${email}) @${cleanUsername} expires ${expires.toISOString()}`);
+    // Send welcome email
+    sendEmail(email, '[BthLab] مرحباً بك في مختبر البث!',
+      `<div dir="rtl" style="font-family:Tahoma,sans-serif;max-width:500px;margin:0 auto;padding:20px;text-align:center">
+        <h2 style="color:#0891b2">🎉 مرحباً بك في BthLab!</h2>
+        <p style="font-size:14px">مرحباً ${name || ''},</p>
+        <p style="font-size:14px">تم تفعيل اشتراكك بنجاح</p>
+        <div style="margin:20px 0;padding:16px;background:#f5f5f5;border-radius:12px;font-family:monospace;font-size:20px;font-weight:bold;letter-spacing:2px">${key}</div>
+        <p style="font-size:12px;color:#888">ادخل هذا المفتاح في صفحة تسجيل الدخول</p>
+        <p style="font-size:12px;color:#888">ينتهي اشتراكك: ${expires.toLocaleDateString('ar-SA')}</p>
+        <p style="font-size:10px;color:#aaa;margin-top:20px">⚠️ لا تشارك هذا المفتاح مع أحد</p>
+      </div>`
+    );
     res.json({ ok: true, key, expiresAt: expires.toISOString() });
   } catch(e) { console.error('[Subscribe] Error:', e); res.json({ ok: false, error: 'خطأ في التحقق' }); }
 });
