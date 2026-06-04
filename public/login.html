@@ -6,8 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تسجيل دخول — BthLab</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.moyasar.com/mpf/1.14.0/moyasar.css">
-<script src="https://cdn.moyasar.com/mpf/1.14.0/moyasar.js"></script>
 <style>
   :root{--bg:#06060b;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);--border:rgba(255,255,255,.06);--accent:#ff0050;--accent2:#0891b2;--text:#f0f0f5;--muted:#555;--green:#1dba72;--red:#ef4444}
   *{margin:0;padding:0;box-sizing:border-box}
@@ -123,11 +121,12 @@
           <input type="text" id="sub-tiktok" placeholder="@username" dir="ltr" style="text-align:left;letter-spacing:0">
           <div style="font-size:10px;color:var(--muted);margin-top:4px">⚠️ لا يمكن تغييره لاحقاً إلا عن طريق الدعم</div>
         </div>
-        <div class="mysr-form"></div>
+        <button class="btn btn-sub" onclick="startPayment()" id="pay-btn">💳 ادفع 80 ريال</button>
+        <div class="msg" id="pay-msg"></div>
         <div class="trust-mini">
           <span>🔒 دفع آمن</span>
           <span>💳 مدى / فيزا</span>
-          <span>🇸🇦 ميسّر</span>
+          <span>🇸🇦 StreamPay</span>
         </div>
       </div>
     </div>
@@ -239,30 +238,36 @@ if (localStorage.getItem('theme') === 'light') {
   document.getElementById('theme-toggle').textContent = '🌙';
 }
 
-// Init Moyasar
-Moyasar.init({
-  element: '.mysr-form',
-  amount: 8000,
-  currency: 'SAR',
-  description: 'BthLab — اشتراك شهري',
-  publishable_api_key: 'pk_test_K1YdX6c5X1vYvCByHN77jSxHkJikW9LvAnGmkcaM',
-  callback_url: location.origin + '/payment-callback.html',
-  methods: ['creditcard'],
-  supported_networks: ['mada', 'visa', 'mastercard'],
-  on_completed: function(payment) {
-    localStorage.setItem('pending_payment', JSON.stringify({
-      id: payment.id,
-      name: document.getElementById('sub-name').value.trim(),
-      email: document.getElementById('sub-email').value.trim(),
-      tiktokUsername: document.getElementById('sub-tiktok').value.trim(),
-    }));
-  },
-  on_initiating: function() {
-    const tiktok = document.getElementById('sub-tiktok').value.trim();
-    if (!tiktok) { alert('ادخل يوزرنيم التيك توك حقك'); return false; }
-    return true;
-  },
-});
+// StreamPay payment
+async function startPayment() {
+  const name = document.getElementById('sub-name').value.trim();
+  const email = document.getElementById('sub-email').value.trim();
+  const tiktokUsername = document.getElementById('sub-tiktok').value.trim();
+  const msg = document.getElementById('pay-msg');
+  const btn = document.getElementById('pay-btn');
+  if (!name) { msg.className='msg error'; msg.textContent='ادخل اسمك'; return; }
+  if (!email) { msg.className='msg error'; msg.textContent='ادخل إيميلك'; return; }
+  if (!tiktokUsername) { msg.className='msg error'; msg.textContent='ادخل يوزرنيم التيك توك'; return; }
+  btn.disabled = true; btn.textContent = '...جاري التحويل';
+  msg.className=''; msg.textContent='';
+  try {
+    const res = await fetch('/api/create-payment', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, email, tiktokUsername }),
+    });
+    const data = await res.json();
+    if (data.ok && data.url) {
+      msg.className='msg success'; msg.textContent='✅ جاري التحويل لصفحة الدفع...';
+      setTimeout(() => { window.location.href = data.url; }, 500);
+    } else {
+      msg.className='msg error'; msg.textContent = data.error || 'حصل خطأ';
+      btn.disabled = false; btn.textContent = '💳 ادفع 80 ريال';
+    }
+  } catch(e) {
+    msg.className='msg error'; msg.textContent='خطأ في الاتصال';
+    btn.disabled = false; btn.textContent = '💳 ادفع 80 ريال';
+  }
+}
 </script>
 </body>
 </html>

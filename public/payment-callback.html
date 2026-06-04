@@ -37,36 +37,30 @@
 <script>
 async function init() {
   const params = new URLSearchParams(location.search);
-  const paymentId = params.get('id');
   const status = params.get('status');
+  const invoiceId = params.get('invoice_id');
+  const paymentId = params.get('payment_id');
+  const email = params.get('email') || '';
+  const name = params.get('name') || '';
+  const tiktokUsername = params.get('tiktokUsername') || '';
   const card = document.getElementById('card');
 
-  if (!paymentId || status !== 'paid') {
+  if (status === 'failed' || status === 'failed_internal_error' || (!invoiceId && !paymentId)) {
     card.classList.add('error-card');
     card.innerHTML = `
       <div class="icon">❌</div>
       <div class="title error-title">فشل الدفع</div>
       <div class="desc">${params.get('message') || 'لم يتم إكمال عملية الدفع'}</div>
-      <a href="/" class="btn">حاول مرة أخرى</a>
+      <a href="/login.html" class="btn">حاول مرة أخرى</a>
     `;
     return;
   }
-
-  // Get saved info
-  let info = {};
-  try { info = JSON.parse(localStorage.getItem('pending_payment') || '{}'); } catch(e) {}
-  localStorage.removeItem('pending_payment');
 
   try {
     const res = await fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        paymentId,
-        email: info.email || '',
-        name: info.name || '',
-        tiktokUsername: info.tiktokUsername || '',
-      }),
+      body: JSON.stringify({ invoiceId, paymentId, email: decodeURIComponent(email), name: decodeURIComponent(name), tiktokUsername: decodeURIComponent(tiktokUsername) }),
     });
     const data = await res.json();
 
@@ -83,7 +77,7 @@ async function init() {
         <button class="copy-btn" onclick="copyKey()">📋 نسخ المفتاح</button>
         <div class="info">
           ⏰ ينتهي الاشتراك: ${new Date(data.expiresAt).toLocaleDateString('ar-SA')}<br>
-          📧 تم إرسال المفتاح على: ${info.email || '—'}
+          📧 تم إرسال المفتاح على إيميلك
         </div>
         <a href="/login.html" class="btn">🔑 سجل دخول</a>
       `;
@@ -93,7 +87,7 @@ async function init() {
         <div class="icon">⚠️</div>
         <div class="title error-title">خطأ</div>
         <div class="desc">${data.error || 'حدث خطأ غير متوقع'}</div>
-        <a href="/" class="btn">حاول مرة أخرى</a>
+        <a href="/login.html" class="btn">حاول مرة أخرى</a>
       `;
     }
   } catch(e) {
@@ -102,7 +96,7 @@ async function init() {
       <div class="icon">⚠️</div>
       <div class="title error-title">خطأ في الاتصال</div>
       <div class="desc">تأكد من اتصالك بالإنترنت</div>
-      <a href="/" class="btn">حاول مرة أخرى</a>
+      <a href="/login.html" class="btn">حاول مرة أخرى</a>
     `;
   }
 }
