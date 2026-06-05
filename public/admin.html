@@ -220,15 +220,6 @@
     <a href="/rooms.html" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:linear-gradient(135deg,#7c6bff,#ff6b9d);color:#fff;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;text-decoration:none;transition:all .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">🚀 إنشاء غرفة</a>
   </div>
 
-  <!-- My Links Section -->
-  <div class="card" id="my-links-card" style="margin-top:20px;display:none">
-    <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:12px">🔗 روابطك الجاهزة لـ OBS</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;border-right:3px solid var(--accent2);padding-right:10px;line-height:1.8">
-      انسخ الرابط وحطه كـ <strong style="color:var(--text)">Browser Source</strong> في OBS — الرابط ثابت ومربوط بمفتاحك، ما يحتاج تغيره
-    </div>
-    <div id="links-list" style="display:flex;flex-direction:column;gap:8px"></div>
-  </div>
-
   <!-- Support Form -->
   <div class="card" style="margin-top:20px">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px">🛟 تواصل مع الدعم</div>
@@ -402,45 +393,6 @@ function toggleGuide() {
 }
 
 // ── My Links ──
-function loadMyLinks() {
-  if (!userKey) return;
-  fetch('/api/my-links?key=' + encodeURIComponent(userKey))
-    .then(r => r.json())
-    .then(data => {
-      if (!data.ok) return;
-      const card = document.getElementById('my-links-card');
-      card.style.display = 'block';
-      const linksEl = document.getElementById('links-list');
-      const linkItems = [
-        { icon: '🎰', name: 'عجلة الحظ (Overlay)', url: data.links.wheelOverlay },
-        { icon: '💬', name: 'شات البث (Overlay)', url: data.links.chatOverlay },
-        { icon: '🔊', name: 'تحكم الأصوات', url: data.links.sounds },
-      ];
-      linksEl.innerHTML = linkItems.map((l, i) => `
-        <div class="link-row">
-          <div class="link-icon">${l.icon}</div>
-          <div class="link-info">
-            <div class="link-name">${l.name}</div>
-            <div class="link-url">${l.url}</div>
-          </div>
-          <button class="link-copy" id="copy-link-${i}" onclick="copyLink(${i}, '${l.url.replace(/'/g, "\\'")}')">📋 نسخ</button>
-        </div>
-      `).join('');
-    })
-    .catch(() => {});
-}
-
-function copyLink(idx, url) {
-  navigator.clipboard.writeText(url).then(() => {
-    const btn = document.getElementById('copy-link-' + idx);
-    btn.textContent = '✅ تم!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = '📋 نسخ'; btn.classList.remove('copied'); }, 2000);
-  });
-}
-
-if (userKey) loadMyLinks();
-
 async function sendContact() {
   const name = document.getElementById('contact-name').value.trim();
   const email = document.getElementById('contact-email').value.trim();
