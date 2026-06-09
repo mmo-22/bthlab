@@ -1,7 +1,10 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { WebcastPushConnection } = require('tiktok-live-connector');
+const { TikTokLiveConnection, SignConfig } = require('tiktok-live-connector');
+
+// Configure Euler Stream API key for signing
+SignConfig.apiKey = process.env.EULER_API_KEY || 'euler_ZWQwZWU0NWQwNzRmZjZhYmQwZTNlMThkZDE5MDM2MzRhN2ExNjQwNzQzNWU1ZTVmYWY2MzU2';
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -447,9 +450,9 @@ async function connectRoom(username, sessionid = null) {
   io.emit('room:status', { username: key, status: 'connecting' });
   console.log(`[TikTok] Connecting to @${key}...`);
 
-  const opts = { processInitialData: false, enableExtendedGiftInfo: true, requestPollingIntervalMs: 2000, websocketPingIntervalMs: 15000 };
+  const opts = { processInitialData: false, enableExtendedGiftInfo: true, signApiKey: process.env.EULER_API_KEY || SignConfig.apiKey };
   if (room.sessionid) opts.sessionId = room.sessionid;
-  const tiktok = new WebcastPushConnection(key, opts);
+  const tiktok = new TikTokLiveConnection(key, opts);
   room.tiktok = tiktok;
 
   try {
@@ -460,9 +463,15 @@ async function connectRoom(username, sessionid = null) {
     io.emit('room:status', { username: key, status: 'connected', viewers: state.viewerCount });
     broadcast(key, 'stats', room.stats);
   } catch(err) {
-    console.log(`[TikTok] Failed @${key}: ${err.message}`);
+    const msg = err.message || '';
+    let userMsg = 'خطأ في الاتصال';
+    if (msg.includes('sign request') || msg.includes('404')) userMsg = 'سيرفر التوقيع غير متاح — جاري إعادة المحاولة تلقائياً';
+    else if (msg.includes('not found') || msg.includes('user_not_found')) userMsg = 'الحساب غير موجود أو مو في بث مباشر';
+    else if (msg.includes('LIVE has ended') || msg.includes('is not live')) userMsg = 'الحساب مو في بث مباشر حالياً';
+    else if (msg.includes('403')) userMsg = 'تيك توك رفض الاتصال — جاري إعادة المحاولة';
+    console.log(`[TikTok] Failed @${key}: ${msg}`);
     room.status = 'error';
-    io.emit('room:status', { username: key, status: 'error', message: err.message });
+    io.emit('room:status', { username: key, status: 'error', message: userMsg, technical: msg });
     scheduleRetry(key);
     return;
   }
@@ -631,9 +640,11 @@ function scheduleRetry(key, delay = 5000) {
   const room = rooms[key]; if (!room || room.status === 'offline') return;
   if (room.retryTimer) clearTimeout(room.retryTimer);
   room.retryCount = (room.retryCount || 0) + 1;
-  if (room.retryCount > 10) { room.status = 'offline'; io.emit('room:status', { username: key, status: 'offline' }); return; }
-  const actualDelay = Math.min(delay * Math.pow(1.5, Math.min(room.retryCount - 1, 5)), 60000);
+  if (room.retryCount > 30) { room.status = 'offline'; io.emit('room:status', { username: key, status: 'offline', message: 'توقف الاتصال بعد عدة محاولات — اضغط اتصال مرة ثانية' }); return; }
+  const actualDelay = Math.min(delay * Math.pow(1.5, Math.min(room.retryCount - 1, 6)), 60000);
   room.status = 'retrying';
+  console.log(`[TikTok] Retry #${room.retryCount} for @${key} in ${Math.round(actualDelay/1000)}s`);
+  io.emit('room:status', { username: key, status: 'retrying', retry: room.retryCount, message: `إعادة محاولة ${room.retryCount}/30 بعد ${Math.round(actualDelay/1000)} ثانية` });
   room.retryTimer = setTimeout(() => connectRoom(key), actualDelay);
 }
 
