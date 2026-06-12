@@ -19,19 +19,22 @@
   /* Mobile mode */
   body.mobile { transform:scale(0.55); transform-origin:center center; }
 
-  /* Registration banner - static above wheel */
+  /* Registration banner - glass HUD */
   #reg-banner {
     display:none;
-    background:rgba(0,0,0,0.9);
-    border:2px solid #ffd700;
-    border-radius:16px;
-    padding:14px 24px;
+    background:rgba(10,12,22,.72);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(245,158,11,.45);
+    border-radius:20px;
+    padding:16px 28px;
     color:#fff;
     font-size:20px;
     font-weight:900;
     text-align:center;
     min-width:280px;
     margin-bottom:24px;
+    box-shadow:0 22px 50px -18px rgba(0,0,0,.75), 0 0 36px -12px rgba(245,158,11,.45);
   }
 
   .wheel-wrap {
@@ -45,13 +48,14 @@
     width:0; height:0;
     border-left:16px solid transparent;
     border-right:16px solid transparent;
-    border-top:36px solid #ffd700;
+    border-top:36px solid #f59e0b;
     z-index:10;
+    filter:drop-shadow(0 4px 12px rgba(245,158,11,.65));
   }
 
-  canvas { border-radius:50%; }
+  canvas { border-radius:50%; box-shadow:0 0 0 6px rgba(10,12,22,.72), 0 0 60px -14px rgba(6,182,212,.5); }
 
-  /* Winner popup */
+  /* Winner popup - glass gold */
   #winner-popup {
     position:fixed; inset:0;
     display:flex; align-items:center; justify-content:center;
@@ -61,21 +65,24 @@
   }
   #winner-popup.show { opacity:1; }
   .winner-card {
-    background:rgba(0,0,0,.9); border:3px solid #ffd700;
+    background:rgba(16,12,4,.78);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(245,158,11,.55);
     border-radius:28px; padding:36px 52px; text-align:center;
-    box-shadow: none;
+    box-shadow:0 0 65px -14px rgba(245,158,11,.6), inset 0 0 45px -25px rgba(245,158,11,.45);
     animation:popIn .5s cubic-bezier(.34,1.56,.64,1);
   }
   @keyframes popIn { from{transform:scale(0) rotate(-10deg)} to{transform:scale(1) rotate(0)} }
   .winner-avatar-wrap { margin-bottom:14px; }
-  .winner-avatar { width:90px; height:90px; border-radius:50%; border:4px solid #ffd700; object-fit:cover; }
+  .winner-avatar { width:90px; height:90px; border-radius:50%; border:4px solid #f59e0b; object-fit:cover; box-shadow:0 0 28px -6px rgba(245,158,11,.7); }
   .winner-avatar-placeholder {
-    width:90px; height:90px; border-radius:50%; border:4px solid #ffd700;
-    background:#1a1a24; display:flex; align-items:center; justify-content:center;
-    font-size:36px; font-weight:900; color:#ffd700; margin:0 auto;
+    width:90px; height:90px; border-radius:50%; border:4px solid #f59e0b;
+    background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center;
+    font-size:36px; font-weight:900; color:#fde68a; margin:0 auto;
   }
-  .winner-label { font-size:16px; color:#aaa; margin-bottom:8px; }
-  .winner-name  { font-size:32px; font-weight:900; color:#ffd700; }
+  .winner-label { font-size:16px; color:rgba(255,255,255,.55); margin-bottom:8px; }
+  .winner-name  { font-size:32px; font-weight:900; background:linear-gradient(180deg,#fde68a,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
 
   /* Confetti */
   .confetti-piece {

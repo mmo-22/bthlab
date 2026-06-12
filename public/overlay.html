@@ -34,30 +34,33 @@
   .feed.side-right .msg, .feed.side-right .gift-pop { margin-right:0; margin-left:auto; }
   .feed.side-left  .msg, .feed.side-left  .gift-pop { margin-left:0; margin-right:auto; }
 
-  /* Stats bar */
+  /* Stats bar - glass HUD */
   .stats-bar {
     position: fixed;
     top: 12px;
-    background: rgba(0,0,0,.85);
-    border: 1px solid rgba(255,255,255,.15);
-    border-radius: 14px;
-    padding: 8px 14px;
+    background: rgba(10,12,22,.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 16px;
+    padding: 9px 16px;
     display: flex;
     gap: 14px;
     color: #fff;
     font-size: 13px;
     font-weight: 700;
+    box-shadow: 0 16px 38px -16px rgba(0,0,0,.75);
   }
   .stats-bar.side-right { right: 12px; }
   .stats-bar.side-left  { left: 12px; }
   .stat-item {
     display: flex; align-items: center; gap: 4px;
   }
-  .stat-item .val { color: #ffd700; font-weight: 900; }
+  .stat-item .val { color: #f59e0b; font-weight: 900; font-variant-numeric: tabular-nums; }
   .stat-item.new { animation: pulse .6s ease; }
   @keyframes pulse {
     0%,100% { transform: scale(1); }
-    50% { transform: scale(1.15); color:#1dba72; }
+    50% { transform: scale(1.15); color:#10b981; }
   }
 
   .msg {

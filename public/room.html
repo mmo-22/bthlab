@@ -538,11 +538,13 @@
     <!-- HOST CONTROLS -->
     <div class="card host-controls" id="host-controls">
       <div class="card-title">🎛️ لوحة التحكم</div>
-      <div class="tabs-mini">
+      <div class="tabs-mini" style="flex-wrap:wrap">
         <button class="tab-mini active" onclick="switchCtrl('poll')">📊 تصويت</button>
         <button class="tab-mini" onclick="switchCtrl('wheel')">🎡 عجلة</button>
         <button class="tab-mini" onclick="switchCtrl('quiz')">❓ سؤال</button>
         <button class="tab-mini" onclick="switchCtrl('guess')">💡 خمّن</button>
+        <button class="tab-mini" onclick="switchCtrl('password')">🔐 كلمة السر</button>
+        <button class="tab-mini" onclick="switchCtrl('wordwar')">⚔️ حرب الكلمات</button>
         <button class="tab-mini" onclick="switchCtrl('knockout')">🏆 خروج</button>
         <button class="tab-mini" onclick="switchCtrl('viewers')">👥 مشاهدون</button>
       </div>
@@ -646,6 +648,38 @@
         </div>
         <div id="ko-stats-ctrl" style="margin-top:8px;font-size:0.82rem;color:var(--muted)">—</div>
       </div>
+
+      <!-- Password ctrl -->
+      <div class="ctrl-panel" id="ctrl-password">
+        <input class="ctrl" id="pw-word" placeholder="اكتب كلمة السر..." maxlength="20">
+        <div class="btn-row">
+          <button class="btn-sm btn-primary" onclick="startPassword()">▶ بدء</button>
+          <button class="btn-sm btn-warn" onclick="socket.emit('room:password-reveal',{code:ROOM_CODE})">💡 اكشف حرف</button>
+          <button class="btn-sm btn-danger" onclick="socket.emit('room:password-stop',{code:ROOM_CODE})">◼ إيقاف</button>
+        </div>
+        <div id="pw-status-ctrl" style="margin-top:10px;color:var(--muted);font-size:0.85rem">الحرف الأول والأخير يظهرون تلقائياً — المشاهدون يخمنون في الدردشة</div>
+      </div>
+
+      <!-- Word War ctrl -->
+      <div class="ctrl-panel" id="ctrl-wordwar">
+        <input class="ctrl" id="ww-category-in" placeholder="الفئة (مثل: فواكه، مدن، حيوانات...)" maxlength="40">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="ctrl" id="ww-red-kw" value="أحمر" placeholder="كلمة انضمام الأحمر" style="margin:0;flex:1">
+          <input class="ctrl" id="ww-blue-kw" value="أزرق" placeholder="كلمة انضمام الأزرق" style="margin:0;flex:1">
+        </div>
+        <input class="ctrl" id="ww-words" placeholder="كلمات صحيحة مفصولة بفواصل (اختياري — فارغ = أي كلمة جديدة تُحسب)">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <span class="label-sm" style="margin:0">مدة الجولة (ثانية):</span>
+          <input class="ctrl" id="ww-duration" type="number" value="60" min="15" max="300" style="width:80px;margin:0">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sm btn-success" onclick="wwOpen()">📝 فتح التسجيل</button>
+          <button class="btn-sm btn-primary" onclick="wwStart()">▶ بدء الجولة</button>
+          <button class="btn-sm btn-danger" onclick="socket.emit('room:wordwar-stop',{code:ROOM_CODE})">⏹ إيقاف</button>
+          <button class="btn-sm btn-warn" onclick="wwReset()">🔄 تصفير</button>
+        </div>
+        <div id="ww-status-ctrl" style="margin-top:10px;color:var(--muted);font-size:0.85rem">فتح التسجيل لا يصفّر النقاط — التصفير زر مستقل</div>
+      </div>
     </div>
 
     <!-- POLL DISPLAY -->
@@ -740,6 +774,42 @@
         <div id="ko-winner-name" style="font-size:1.3rem;font-weight:900;color:#ffd700;margin-top:6px"></div>
         <div style="font-size:0.85rem;color:var(--muted)">بطل البطولة!</div>
       </div>
+    </div>
+
+    <!-- PASSWORD DISPLAY -->
+    <div class="card activity-display" id="password-display">
+      <div class="card-title">🔐 كلمة السر</div>
+      <div id="pw-letters-row" style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:14px 0;direction:rtl"></div>
+      <div id="pw-status" style="text-align:center;font-size:0.95rem;color:var(--warning);font-weight:700"></div>
+      <div id="pw-winner-banner" style="display:none;text-align:center;padding:14px;margin-top:10px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35);border-radius:12px">
+        <div style="font-size:1.6rem">🏆</div>
+        <div id="pw-winner-name" style="font-size:1.2rem;font-weight:900;color:var(--success);margin-top:4px"></div>
+        <div style="font-size:0.85rem;color:var(--muted)">عرف كلمة السر!</div>
+      </div>
+    </div>
+
+    <!-- WORD WAR DISPLAY -->
+    <div class="card activity-display" id="wordwar-display">
+      <div class="card-title">⚔️ حرب الكلمات</div>
+      <div id="ww-phase" style="text-align:center;font-size:0.9rem;color:var(--warning);font-weight:700;margin-bottom:6px"></div>
+      <div id="ww-category" style="text-align:center;font-size:1.05rem;font-weight:900;margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:10px">
+        <div style="text-align:center;padding:10px;border-radius:12px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.35)">
+          <div style="font-size:0.8rem;color:#f87171;font-weight:800">🔴 الأحمر (<span id="ww-red-count">0</span>)</div>
+          <div id="ww-red-score" style="font-size:1.7rem;font-weight:900">0</div>
+        </div>
+        <div style="font-weight:900;color:var(--muted)">VS</div>
+        <div style="text-align:center;padding:10px;border-radius:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.35)">
+          <div style="font-size:0.8rem;color:#60a5fa;font-weight:800">🔵 الأزرق (<span id="ww-blue-count">0</span>)</div>
+          <div id="ww-blue-score" style="font-size:1.7rem;font-weight:900">0</div>
+        </div>
+      </div>
+      <div id="ww-timer" style="text-align:center;font-size:1.1rem;font-weight:900;margin-bottom:8px;font-variant-numeric:tabular-nums"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div id="ww-red-words" style="min-height:46px;border-radius:10px;padding:6px;background:rgba(248,113,113,.05);border:1px solid rgba(248,113,113,.15);display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start"></div>
+        <div id="ww-blue-words" style="min-height:46px;border-radius:10px;padding:6px;background:rgba(96,165,250,.05);border:1px solid rgba(96,165,250,.15);display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start"></div>
+      </div>
+      <div id="ww-result" style="display:none;text-align:center;padding:12px;margin-top:10px;border-radius:12px;font-weight:900;font-size:1.1rem"></div>
     </div>
 
   </div>
@@ -839,6 +909,12 @@ function connectSocket(isHost) {
       }
     }
     if (data.quiz) showQuizForViewer(data.quiz);
+    if (data.password) {
+      document.getElementById('password-display').classList.add('show');
+      renderPwLetters(data.password.letters);
+      document.getElementById('pw-status').textContent = '🔐 اكتب الكلمة في الدردشة!';
+    }
+    if (data.wordwar) applyWwState(data.wordwar);
   });
 
   socket.on('room:host-ok', (data) => {
@@ -1051,6 +1127,137 @@ function connectSocket(isHost) {
   socket.on('room:knockout-stopped', () => {
     document.getElementById('knockout-display').classList.remove('show');
   });
+
+  // ── Password events ───────────────────────────────────
+  socket.on('room:password-update', (d) => {
+    document.getElementById('password-display').classList.add('show');
+    document.getElementById('pw-winner-banner').style.display = 'none';
+    renderPwLetters(d.letters);
+    document.getElementById('pw-status').textContent = IS_HOST ? 'اكشف الحروف أو انتظر التخمين في الدردشة' : '🔐 اكتب الكلمة في الدردشة!';
+    const hidden = (d.letters || []).filter(c => c === '_').length;
+    const ctrl = document.getElementById('pw-status-ctrl'); if (ctrl) ctrl.textContent = hidden + ' حرف مخفي متبقي';
+  });
+  socket.on('room:password-won', (d) => {
+    renderPwLetters([...d.word]);
+    document.getElementById('pw-status').textContent = '✅ الكلمة: ' + d.word;
+    document.getElementById('pw-winner-name').textContent = d.winner.name;
+    document.getElementById('pw-winner-banner').style.display = 'block';
+    appendChat('🏆 نتيجة', `${d.winner.name} عرف كلمة السر!`);
+  });
+  socket.on('room:password-stopped', (d) => {
+    if (d.word) { renderPwLetters([...d.word]); document.getElementById('pw-status').textContent = '◼ انتهت الجولة — الكلمة: ' + d.word; }
+  });
+
+  // ── Word War events ───────────────────────────────────
+  socket.on('room:wordwar-open', (d) => { applyWwState({ ...d, phase: 'register' }); });
+  socket.on('room:wordwar-join', (d) => {
+    document.getElementById('ww-red-count').textContent = d.redCount;
+    document.getElementById('ww-blue-count').textContent = d.blueCount;
+    const ctrl = document.getElementById('ww-status-ctrl'); if (ctrl) ctrl.textContent = `🔴 ${d.redCount} × ${d.blueCount} 🔵`;
+    if (d.player === myName) appendChat('⚔️ النظام', `انضممت للفريق ${d.team === 'red' ? 'الأحمر 🔴' : 'الأزرق 🔵'}`);
+  });
+  socket.on('room:wordwar-start', (d) => {
+    applyWwState({ ...d, phase: 'playing' });
+    document.getElementById('ww-red-words').innerHTML = '';
+    document.getElementById('ww-blue-words').innerHTML = '';
+    document.getElementById('ww-result').style.display = 'none';
+  });
+  socket.on('room:wordwar-word', (d) => {
+    document.getElementById('ww-red-score').textContent = d.redScore;
+    document.getElementById('ww-blue-score').textContent = d.blueScore;
+    const col = document.getElementById(d.team === 'red' ? 'ww-red-words' : 'ww-blue-words');
+    const chip = document.createElement('span');
+    chip.style.cssText = 'font-size:0.75rem;font-weight:800;padding:3px 9px;border-radius:99px;' + (d.team === 'red' ? 'background:rgba(248,113,113,.15);color:#fca5a5' : 'background:rgba(96,165,250,.15);color:#93c5fd');
+    chip.textContent = d.word;
+    col.appendChild(chip);
+    while (col.children.length > 14) col.removeChild(col.firstChild);
+  });
+  socket.on('room:wordwar-end', (d) => {
+    if (wwTimerInt) { clearInterval(wwTimerInt); wwTimerInt = null; }
+    document.getElementById('ww-timer').textContent = '';
+    document.getElementById('ww-phase').textContent = '🏁 انتهت الجولة';
+    document.getElementById('ww-red-score').textContent = d.redScore;
+    document.getElementById('ww-blue-score').textContent = d.blueScore;
+    const res = document.getElementById('ww-result');
+    res.style.display = 'block';
+    if (d.winner === 'red') { res.style.cssText += ';background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5'; res.textContent = '🏆 فاز الفريق الأحمر!'; }
+    else if (d.winner === 'blue') { res.style.cssText += ';background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.4);color:#93c5fd'; res.textContent = '🏆 فاز الفريق الأزرق!'; }
+    else { res.style.cssText += ';background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.4);color:#fbbf24'; res.textContent = '🤝 تعادل!'; }
+  });
+  socket.on('room:wordwar-reset', () => {
+    if (wwTimerInt) { clearInterval(wwTimerInt); wwTimerInt = null; }
+    ['ww-red-score','ww-blue-score','ww-red-count','ww-blue-count'].forEach(id => document.getElementById(id).textContent = '0');
+    document.getElementById('ww-red-words').innerHTML = '';
+    document.getElementById('ww-blue-words').innerHTML = '';
+    document.getElementById('ww-result').style.display = 'none';
+    document.getElementById('ww-timer').textContent = '';
+    document.getElementById('ww-phase').textContent = '🔄 جولة جديدة — النقاط والفرق صُفّرت';
+    const ctrl = document.getElementById('ww-status-ctrl'); if (ctrl) ctrl.textContent = 'تم التصفير';
+  });
+  socket.on('room:error-soft', (d) => { alert(d.message); });
+}
+
+// ── Password & Word War ──────────────────────────────────
+let wwTimerInt = null;
+
+function startPassword() {
+  const w = document.getElementById('pw-word').value.trim();
+  if (w.length < 2) { alert('اكتب كلمة من حرفين على الأقل'); return; }
+  socket.emit('room:password-start', { code: ROOM_CODE, word: w });
+}
+
+function renderPwLetters(letters) {
+  document.getElementById('pw-letters-row').innerHTML = (letters || []).map(c => {
+    const hidden = c === '_';
+    return `<div style="width:44px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:900;${hidden ? 'background:rgba(255,255,255,.04);border:2px dashed rgba(255,255,255,.2);color:var(--muted)' : 'background:rgba(74,222,128,.15);border:2px solid rgba(74,222,128,.5);color:var(--success)'}">${hidden ? '؟' : escHtml(c)}</div>`;
+  }).join('');
+}
+
+function wwOpen() {
+  const category = document.getElementById('ww-category-in').value.trim();
+  const redKeyword = document.getElementById('ww-red-kw').value.trim() || 'أحمر';
+  const blueKeyword = document.getElementById('ww-blue-kw').value.trim() || 'أزرق';
+  const validWords = document.getElementById('ww-words').value.split(/[،,]/).map(w => w.trim()).filter(Boolean);
+  if (!category) { alert('اكتب الفئة أول'); return; }
+  socket.emit('room:wordwar-open', { code: ROOM_CODE, category, redKeyword, blueKeyword, validWords });
+}
+
+function wwStart() {
+  const duration = parseInt(document.getElementById('ww-duration').value) || 60;
+  socket.emit('room:wordwar-start', { code: ROOM_CODE, duration });
+}
+
+function wwReset() {
+  if (!confirm('تصفير النقاط والفرق وبدء من الصفر؟')) return;
+  socket.emit('room:wordwar-reset', { code: ROOM_CODE });
+}
+
+function applyWwState(d) {
+  document.getElementById('wordwar-display').classList.add('show');
+  document.getElementById('ww-category').textContent = d.category ? '📂 الفئة: ' + d.category : '';
+  document.getElementById('ww-red-score').textContent = d.redScore || 0;
+  document.getElementById('ww-blue-score').textContent = d.blueScore || 0;
+  document.getElementById('ww-red-count').textContent = d.redCount || 0;
+  document.getElementById('ww-blue-count').textContent = d.blueCount || 0;
+  if (d.phase === 'register') {
+    document.getElementById('ww-phase').innerHTML = `📝 التسجيل مفتوح — اكتب <b style="color:#f87171">"${escHtml(d.redKeyword || 'أحمر')}"</b> أو <b style="color:#60a5fa">"${escHtml(d.blueKeyword || 'أزرق')}"</b> في الدردشة`;
+    document.getElementById('ww-timer').textContent = '';
+  } else if (d.phase === 'playing') {
+    document.getElementById('ww-phase').textContent = '🔥 الجولة شغالة — اكتب كلمات من الفئة في الدردشة!';
+    if (d.endTime) startWwTimer(d.endTime);
+  }
+}
+
+function startWwTimer(endTime) {
+  if (wwTimerInt) clearInterval(wwTimerInt);
+  const el = document.getElementById('ww-timer');
+  function tick() {
+    const s = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+    el.textContent = '⏱ ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    if (s <= 0 && wwTimerInt) { clearInterval(wwTimerInt); wwTimerInt = null; }
+  }
+  tick();
+  wwTimerInt = setInterval(tick, 250);
 }
 
 // ── Chat ──────────────────────────────────────────────────
@@ -1307,7 +1514,7 @@ function answerQuiz(idx) {
 
 // ── Host controls tabs ────────────────────────────────────
 function switchCtrl(tab) {
-  document.querySelectorAll('.tab-mini').forEach((b,i) => b.classList.toggle('active', ['poll','wheel','quiz','guess','knockout','viewers'][i] === tab));
+  document.querySelectorAll('.tab-mini').forEach((b,i) => b.classList.toggle('active', ['poll','wheel','quiz','guess','password','wordwar','knockout','viewers'][i] === tab));
   document.querySelectorAll('.ctrl-panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`ctrl-${tab}`)?.classList.add('active');
 }

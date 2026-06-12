@@ -9,9 +9,9 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body.mobile{transform:scale(0.55);transform-origin:center center}
 html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',sans-serif;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.main{position:relative;background:rgba(0,0,0,.92);border:2px solid rgba(239,68,68,.4);border-radius:22px;padding:24px 28px;min-width:520px;max-width:680px;opacity:0;transition:opacity .15s;overflow:hidden}
+.main{position:relative;background:rgba(10,12,22,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(239,68,68,.45);border-radius:24px;padding:24px 28px;min-width:520px;max-width:680px;opacity:0;transition:opacity .15s;overflow:hidden;box-shadow:0 26px 60px -22px rgba(0,0,0,.8), 0 0 38px -14px rgba(239,68,68,.4)}
 .main.show{opacity:1}
-.main::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ef4444,#ffd700,#ef4444)}
+.main::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#ef4444,#f59e0b,#ef4444)}
 
 .title{font-size:18px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:10px}
 .title span{color:#ef4444;font-weight:900}

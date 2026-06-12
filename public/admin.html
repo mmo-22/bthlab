@@ -8,57 +8,68 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
-  :root { --bg:#0a0a0f; --surface:#111118; --surface2:#1a1a24; --border:rgba(255,255,255,.08); --accent:#ff0050; --accent2:#0891b2; --text:#f0f0f5; --muted:#666; --green:#1dba72; --red:#ef4444; }
+  :root { --bg:#06060b; --surface:#0c0c16; --surface2:#10101c; --border:rgba(255,255,255,.07); --accent:#ff0050; --accent2:#06b6d4; --text:#e9eef5; --muted:#8b93a7; --green:#10b981; --red:#ef4444; --gold:#f59e0b; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; padding:24px 16px; }
-  .container { max-width:750px; margin:0 auto; }
-  h1 { font-size:20px; font-weight:700; margin-bottom:4px; } h1 span { color:var(--accent); }
-  .subtitle { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  body { background:radial-gradient(70% 40% at 50% 0%,rgba(8,145,178,.10),transparent 60%),var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100vh; padding:24px 16px; }
+  .container { max-width:780px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:900; margin-bottom:4px; } h1 span { background:linear-gradient(90deg,#22d3ee,#a78bfa); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .subtitle { color:var(--muted); font-size:13px; margin-bottom:22px; }
   .subtitle a { color:var(--accent2); text-decoration:none; }
-  .add-box { display:flex; gap:10px; margin-bottom:24px; }
-  .add-box input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:15px; padding:10px 14px; border-radius:10px; outline:none; direction:ltr; }
-  .add-box input:focus { border-color:var(--accent2); }
+  .ver-badge { font-size:10.5px; font-weight:900; color:var(--accent2); background:rgba(6,182,212,.1); border:1px solid rgba(6,182,212,.3); padding:4px 11px; border-radius:99px; }
+  .add-box { display:flex; gap:10px; margin-bottom:12px; }
+  .add-box input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:15px; padding:12px 16px; border-radius:13px; outline:none; direction:ltr; transition:border-color .2s; }
+  .add-box input:focus { border-color:var(--accent2); box-shadow:0 0 0 3px rgba(6,182,212,.12); }
   .add-box input::placeholder { color:var(--muted); }
-  .btn { background:var(--accent); color:#fff; border:none; font-family:inherit; font-size:14px; font-weight:700; padding:10px 20px; border-radius:10px; cursor:pointer; white-space:nowrap; }
-  .btn:hover { opacity:.85; }
+  .btn { background:linear-gradient(135deg,var(--accent2),#0891b2); color:#021018; border:none; font-family:inherit; font-size:14px; font-weight:900; padding:12px 24px; border-radius:13px; cursor:pointer; white-space:nowrap; transition:.2s; box-shadow:0 10px 24px -10px var(--accent2); }
+  .btn:hover { transform:translateY(-2px); }
   .rooms { display:flex; flex-direction:column; gap:14px; }
-  .room-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
-  .room-card.connected { border-color:rgba(29,186,114,.3); }
-  .room-header { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-  .status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-  .status-dot.connected { background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse 1.5s infinite; }
-  .status-dot.connecting,.status-dot.retrying { background:#f59e0b; animation:pulse .8s infinite; }
+
+  /* ═══ بنتو غريد ═══ */
+  .bento { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .bx { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:16px; transition:.2s; position:relative; overflow:hidden; }
+  .bx:hover { border-color:rgba(255,255,255,.16); }
+  .bx.hero { grid-column:span 2; grid-row:span 2; display:flex; flex-direction:column; justify-content:space-between; background:radial-gradient(130% 130% at 85% 0%,rgba(6,182,212,.16),transparent 55%),var(--surface); }
+  .bx.hero.connected { background:radial-gradient(130% 130% at 85% 0%,rgba(16,185,129,.16),transparent 55%),var(--surface); border-color:rgba(16,185,129,.28); }
+  .bx.hero.error, .bx.hero.disconnected, .bx.hero.ended { background:radial-gradient(130% 130% at 85% 0%,rgba(239,68,68,.13),transparent 55%),var(--surface); }
+  .hero-top { display:flex; align-items:flex-start; gap:11px; }
+  .status-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; margin-top:6px; }
+  .status-dot.connected { background:var(--green); box-shadow:0 0 10px var(--green); animation:pulse 1.5s infinite; }
+  .status-dot.connecting,.status-dot.retrying { background:var(--gold); animation:pulse .8s infinite; }
   .status-dot.error,.status-dot.ended,.status-dot.disconnected { background:var(--red); }
   .status-dot.idle { background:var(--muted); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .room-info { flex:1; }
-  .room-name { font-size:16px; font-weight:700; direction:ltr; }
-  .room-meta { font-size:12px; color:var(--muted); margin-top:2px; }
-  .room-stats { display:flex; gap:14px; font-size:12px; margin-top:6px; }
-  .room-stats span { color:var(--muted); } .room-stats strong { color:var(--text); }
-  .room-top-actions { display:flex; gap:8px; }
-  .top-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer; font-family:inherit; }
+  .room-name { font-size:18px; font-weight:900; direction:ltr; text-align:right; }
+  .room-meta { font-size:12px; color:var(--muted); margin-top:2px; font-weight:700; }
+  .top-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-size:12px; font-weight:800; padding:8px 16px; border-radius:10px; cursor:pointer; font-family:inherit; transition:.2s; align-self:flex-start; }
   .top-btn:hover { border-color:var(--accent); color:var(--accent); }
-  .top-btn.remove { color:var(--red); border-color:rgba(239,68,68,.2); }
-  .games-label { font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:500; }
-  .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(85px,1fr)); gap:8px; }
-  .game-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:12px 6px; border-radius:12px; background:var(--surface2); border:1px solid var(--border); cursor:pointer; transition:all .15s; text-decoration:none; }
-  .game-btn:hover { border-color:rgba(255,255,255,.2); background:rgba(255,255,255,.04); transform:translateY(-1px); }
-  .game-icon { font-size:24px; }
-  .game-name { font-size:10px; font-weight:700; color:var(--muted); text-align:center; }
-  .empty { text-align:center; color:var(--muted); padding:40px; font-size:14px; }
-  .mode-badge { font-size:11px; padding:4px 10px; border-radius:20px; }
-  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); color:var(--text); padding:10px 20px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:100; }
+  .top-btn.remove { color:var(--red); border-color:rgba(239,68,68,.25); margin-right:auto; }
+  .top-btn.remove:hover { background:rgba(239,68,68,.1); }
+  .bx.stat::after { content:''; position:absolute; top:0; inset-inline-start:0; width:100%; height:2px; background:linear-gradient(90deg,var(--c,#06b6d4),transparent); }
+  .bx.stat .v { font-size:23px; font-weight:900; color:var(--c,#06b6d4); font-variant-numeric:tabular-nums; transition:transform .18s ease; }
+  .bx.stat .v.bump { transform:scale(1.12); }
+  .bx.stat .l { font-size:11px; color:var(--muted); font-weight:700; margin-top:2px; }
+  .games-label { grid-column:1/-1; font-size:12px; color:var(--muted); font-weight:800; margin-top:4px; }
+  .bx.game { grid-column:span 2; display:flex; align-items:center; gap:12px; text-decoration:none; cursor:pointer; }
+  .bx.game:hover { transform:translateY(-3px); border-color:color-mix(in srgb,var(--c,#06b6d4) 50%,transparent); box-shadow:0 14px 30px -14px color-mix(in srgb,var(--c,#06b6d4) 55%,transparent); }
+  .bx.game .gi { width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; background:color-mix(in srgb,var(--c,#06b6d4) 13%,transparent); }
+  .bx.game .gn { font-size:14px; font-weight:800; color:var(--text); }
+  .bx.game .gs { font-size:10.5px; color:var(--muted); font-weight:700; }
+  .bx.game .go { margin-right:auto; width:30px; height:30px; border-radius:99px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--muted); transition:.2s; flex-shrink:0; }
+  .bx.game:hover .go { background:var(--c,#06b6d4); color:#021018; border-color:transparent; transform:translateX(-3px); }
+
+  .empty { text-align:center; color:var(--muted); padding:40px; font-size:14px; background:var(--surface); border:1px dashed var(--border); border-radius:18px; }
+  .mode-badge { font-size:11px; font-weight:800; padding:4px 11px; border-radius:20px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); color:var(--text); padding:10px 20px; border-radius:12px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:100; backdrop-filter:blur(10px); }
   .toast.show { opacity:1; }
   .link-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface2); border-radius:10px; }
   .link-row .link-icon { font-size:20px; flex-shrink:0; }
   .link-row .link-info { flex:1; min-width:0; }
   .link-row .link-name { font-size:13px; font-weight:700; color:var(--text); }
   .link-row .link-url { font-size:10px; color:var(--muted); font-family:monospace; direction:ltr; text-align:left; word-break:break-all; margin-top:2px; }
-  .link-row .link-copy { background:var(--accent2); color:#000; border:none; font-family:inherit; font-size:11px; font-weight:700; padding:6px 14px; border-radius:8px; cursor:pointer; flex-shrink:0; transition:all .15s; }
+  .link-row .link-copy { background:var(--accent2); color:#021018; border:none; font-family:inherit; font-size:11px; font-weight:700; padding:6px 14px; border-radius:8px; cursor:pointer; flex-shrink:0; transition:all .15s; }
   .link-row .link-copy:hover { opacity:.85; }
   .link-row .link-copy.copied { background:var(--green); color:#fff; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px 20px; }
   /* Guide */
   .guide-section { margin-bottom:20px; }
   .guide-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 18px; cursor:pointer; font-family:inherit; color:var(--text); font-size:15px; font-weight:700; }
@@ -82,16 +93,15 @@
   @media(max-width:500px){
     body{padding:16px 10px}
     h1{font-size:17px}
-    .add-box{flex-direction:column;gap:8px;margin-bottom:16px}
-    .add-box input{font-size:14px;padding:10px 12px}
-    .btn{width:100%;text-align:center;padding:12px}
-    .room-header{flex-direction:column;align-items:flex-start;gap:8px}
-    .room-top-actions{align-self:stretch}
-    .top-btn{flex:1;text-align:center}
-    .games-grid{grid-template-columns:repeat(3,1fr);gap:6px}
-    .game-icon{font-size:20px}
-    .game-name{font-size:9px}
-    .room-stats{flex-wrap:wrap;gap:8px}
+    .add-box{flex-direction:column;gap:8px;margin-bottom:12px}
+    .add-box input{font-size:14px;padding:11px 12px}
+    .btn{width:100%;text-align:center;padding:13px}
+    .bento{grid-template-columns:repeat(2,1fr);gap:9px}
+    .bx{padding:13px}
+    .bx.stat .v{font-size:18px}
+    .room-name{font-size:15px}
+    .bx.game .gi{width:38px;height:38px;font-size:18px}
+    .bx.game .gn{font-size:12.5px}
     .link-row{flex-direction:column;align-items:stretch;gap:6px}
     .link-row .link-copy{width:100%;text-align:center;padding:8px}
     .guide-step-desc{padding-right:0}
@@ -106,7 +116,8 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <h1><img src="/logo.svg" alt="BthLab" style="height:32px;vertical-align:middle;margin-left:6px"> <span>BthLab</span></h1>
     <div style="display:flex;align-items:center;gap:8px">
-      <span class="mode-badge" id="mode-badge" style="background:var(--accent2);color:#000">🎫 مشترك</span>
+      <span class="ver-badge" id="ver-badge">v—</span>
+      <span class="mode-badge" id="mode-badge" style="background:var(--accent2);color:#021018">🎫 مشترك</span>
       <button onclick="logout()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🚪 خروج</button>
     </div>
   </div>
@@ -279,12 +290,16 @@ let myUsername = ''; // The single connected account
 
 async function apiFetch(url, opts={}) { return fetch(url, { ...opts, headers:{'Content-Type':'application/json',...(opts.headers||{})} }); }
 
+// Version badge
+fetch('/api/version').then(r=>r.json()).then(d=>{ if(d.version) document.getElementById('ver-badge').textContent = 'v' + d.version; }).catch(()=>{});
+
 // Load rooms filtered by key
 const roomsQuery = mode === 'owner' ? 'pw=' + encodeURIComponent(ownerPw) : 'key=' + encodeURIComponent(userKey);
 apiFetch('/api/rooms?' + roomsQuery).then(r=>r.json()).then(list => {
   list.forEach(r => { roomsData[r.username] = r; myUsername = r.username; });
   updateConnectUI();
   render();
+  ensureStatsChannel();
 });
 
 // Also check if subscriber already has a saved username
@@ -314,6 +329,34 @@ socket.on('room:status', ({ username, status, viewers }) => {
   roomsData[username].status = status;
   if (viewers) roomsData[username].stats.viewers = viewers;
   render();
+  ensureStatsChannel();
+});
+
+// ── إحصائيات لحظية ──────────────────────────────────────
+// اللوحة تنضم لقناة room:{username} عشان توصلها أحداث stats الحية
+let joinedStatsFor = '';
+function ensureStatsChannel() {
+  if (myUsername && joinedStatsFor !== myUsername) {
+    joinedStatsFor = myUsername;
+    socket.emit('join', { username: myUsername });
+  }
+}
+socket.on('connect', () => { joinedStatsFor = ''; ensureStatsChannel(); });
+
+const STAT_TILES = { viewers:['stat-viewers','👁️'], likes:['stat-likes','❤️'], diamonds:['stat-diamonds','💎'], shares:['stat-shares','🔁'] };
+socket.on('stats', (s) => {
+  if (!myUsername || !roomsData[myUsername]) return;
+  Object.assign(roomsData[myUsername].stats, s);
+  for (const k in STAT_TILES) {
+    if (s[k] === undefined) continue;
+    const el = document.getElementById(STAT_TILES[k][0]);
+    if (!el) continue;
+    const txt = STAT_TILES[k][1] + ' ' + Number(s[k]).toLocaleString();
+    if (el.textContent !== txt) {
+      el.textContent = txt;
+      el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+    }
+  }
 });
 
 async function addRoom() {
@@ -332,6 +375,7 @@ async function addRoom() {
     roomsData[data.username] = { username: data.username, status:'connecting', stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
     updateConnectUI();
     render();
+    ensureStatsChannel();
     showToast('جاري الاتصال بـ @' + data.username + '...');
   } else if (data.error) {
     showToast(data.error);
@@ -375,10 +419,23 @@ function render() {
     const r = roomsData[key], status = r.status||'idle', stats = r.stats||{};
     const authParam = mode === 'owner' ? 'pw=' + encodeURIComponent(ownerPw) : 'key=' + encodeURIComponent(userKey);
     const gamesHtml = GAMES.map(g =>
-      '<a class="game-btn" href="' + location.origin + '/' + g.page + '?username=' + r.username + '&' + authParam + '" target="_blank" style="border-color:' + g.color + '22">' +
-      '<span class="game-icon">' + g.icon + '</span><span class="game-name" style="color:' + g.color + '">' + g.name + '</span></a>'
+      '<a class="bx game" style="--c:' + g.color + '" href="' + location.origin + '/' + g.page + '?username=' + r.username + '&' + authParam + '" target="_blank">' +
+      '<span class="gi">' + g.icon + '</span><div><div class="gn">' + g.name + '</div><div class="gs">فتح لوحة التحكم</div></div><span class="go">←</span></a>'
     ).join('');
-    return '<div class="room-card ' + status + '"><div class="room-header"><div class="status-dot ' + status + '"></div><div class="room-info"><div class="room-name">@' + r.username + '</div><div class="room-meta">' + statusLabel(status) + '</div><div class="room-stats"><span>👁️ <strong>' + (stats.viewers||0).toLocaleString() + '</strong></span><span>❤️ <strong>' + (stats.likes||0).toLocaleString() + '</strong></span><span>💎 <strong>' + (stats.diamonds||0).toLocaleString() + '</strong></span></div></div><div class="room-top-actions"><button class="top-btn remove" onclick="removeRoom(\'' + r.username + '\')">✕ قطع</button></div></div><div class="games-label">🎮 الفعاليات</div><div class="games-grid">' + gamesHtml + '</div></div>';
+    return '<div class="bento">' +
+      '<div class="bx hero ' + status + '">' +
+        '<div class="hero-top"><span class="status-dot ' + status + '"></span><div><div class="room-name">@' + r.username + '</div><div class="room-meta">' + statusLabel(status) + '</div></div></div>' +
+        '<button class="top-btn remove" onclick="removeRoom(\'' + r.username + '\')">✕ قطع الاتصال</button>' +
+      '</div>' +
+      '<div class="bx stat" style="--c:#06b6d4"><div class="v" id="stat-viewers">👁️ ' + (stats.viewers||0).toLocaleString() + '</div><div class="l">المشاهدون</div></div>' +
+      '<div class="bx stat" style="--c:#ec4899"><div class="v" id="stat-likes">❤️ ' + (stats.likes||0).toLocaleString() + '</div><div class="l">الإعجابات</div></div>' +
+      '<div class="bx stat" style="--c:#f59e0b"><div class="v" id="stat-diamonds">💎 ' + (stats.diamonds||0).toLocaleString() + '</div><div class="l">الدياموند</div></div>' +
+      '<div class="bx stat" style="--c:#10b981"><div class="v" id="stat-shares">🔁 ' + (stats.shares||0).toLocaleString() + '</div><div class="l">المشاركات</div></div>' +
+      '<a class="bx game" style="--c:#8b5cf6;grid-column:1/-1" href="obs-links.html?username=' + r.username + '&' + authParam + '" target="_blank">' +
+      '<span class="gi">📺</span><div><div class="gn">OBS Link Generator</div><div class="gs">ولّد روابط كل الأوفرلايات الجاهزة للبث</div></div><span class="go">←</span></a>' +
+      '<div class="games-label">🎮 الفعاليات — اضغط لفتح لوحة التحكم</div>' +
+      gamesHtml +
+    '</div>';
   }).join('');
 }
 

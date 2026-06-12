@@ -10,7 +10,7 @@
 body.mobile{transform:scale(0.55);transform-origin:center center}
 html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',sans-serif;overflow:hidden;display:flex;align-items:center;justify-content:center}
 :root{--scale:1}
-.main-box{position:relative;background:rgba(0,0,0,.92);border:2px solid rgba(255,255,255,.12);border-radius:22px;padding:calc(20px * var(--scale)) calc(24px * var(--scale));width:calc(700px * var(--scale));height:calc(460px * var(--scale));opacity:0;pointer-events:none;transition:opacity .15s;overflow:hidden}
+.main-box{position:relative;background:rgba(10,12,22,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:calc(20px * var(--scale)) calc(24px * var(--scale));width:calc(700px * var(--scale));height:calc(460px * var(--scale));opacity:0;pointer-events:none;transition:opacity .15s;overflow:hidden;box-shadow:0 26px 60px -22px rgba(0,0,0,.8)}
 .main-box.show{opacity:1}
 
 .game-title{font-size:calc(18px * var(--scale));color:rgba(255,255,255,.5);text-align:center;margin-bottom:calc(6px * var(--scale))}
