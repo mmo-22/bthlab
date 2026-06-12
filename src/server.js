@@ -21,6 +21,12 @@ const io = new Server(httpServer, {
 app.use(express.json({ limit: '2mb' }));
 
 // ══════════════════════════════════════════════════════════
+// ── Version ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+const VERSION = '2.3.0';
+app.get('/api/version', (req, res) => res.json({ version: VERSION }));
+
+// ══════════════════════════════════════════════════════════
 // ── Email Setup (Resend) ─────────────────────────────────
 // ══════════════════════════════════════════════════════════
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -415,6 +421,32 @@ app.use(express.static(path.join(__dirname, '../public')));
 // ── TikTok Connection ────────────────────────────────────
 // ══════════════════════════════════════════════════════════
 const rooms = {};
+
+// ── TikTok v1/v2 data normalization ──────────────────────
+// tiktok-live-connector v2.x نقل حقول المستخدم داخل data.user
+// والصورة صارت قائمة روابط في avatarThumb/profilePicture
+function pickUrl(p) {
+  if (!p) return null;
+  if (typeof p === 'string') return p;
+  const list = p.urlList || p.urls || p.url;
+  if (Array.isArray(list) && list.length) return list[0];
+  if (typeof list === 'string') return list;
+  return null;
+}
+function extractUser(data) {
+  const u = (data && data.user) || {};
+  const userId = String(data.userId || u.userId || u.id || data.uniqueId || u.uniqueId || '') || null;
+  const uniqueId = data.uniqueId || u.uniqueId || '';
+  const nickname = data.nickname || u.nickname || uniqueId || 'مشاهد';
+  const avatar = data.profilePictureUrl
+    || pickUrl(u.profilePicture) || pickUrl(u.avatarThumb)
+    || pickUrl(data.profilePicture) || pickUrl(data.avatarThumb)
+    || null;
+  const isModerator = (data.isModerator !== undefined) ? data.isModerator : (u.isModerator || false);
+  const isSubscriber = (data.isSubscriber !== undefined) ? data.isSubscriber : (u.isSubscriber || false);
+  const followRole = (data.followRole !== undefined) ? data.followRole : ((u.followInfo && u.followInfo.followStatus) !== undefined ? u.followInfo.followStatus : u.followRole);
+  return { userId, uniqueId, nickname, avatar, isModerator, isSubscriber, followRole };
+}
 const MAX_STORED = 100;
 
 function normalizeAr(s) {
@@ -477,14 +509,15 @@ async function connectRoom(username, sessionid = null) {
   }
 
   tiktok.on('chat', (data) => {
-    const msg = { type:'chat', id: data.msgId || Date.now(), user: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, comment: data.comment, isModerator: data.isModerator, isSubscriber: data.isSubscriber, followRole: data.followRole, ts: Date.now() };
+    const usr = extractUser(data);
+    const msg = { type:'chat', id: data.msgId || Date.now(), user: usr.nickname, avatar: usr.avatar, comment: data.comment, isModerator: usr.isModerator, isSubscriber: usr.isSubscriber, followRole: usr.followRole, ts: Date.now() };
     storeMsg(key, msg);
     broadcast(key, 'chat', msg);
     // Wheel keyword check
     const wheel = getWheel(key);
-    if (wheel.accepting && wheel.keyword && data.comment && data.comment.trim().includes(wheel.keyword) && !wheel.entries.has(data.userId)) {
-      const entry = { userId: data.userId, name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null };
-      wheel.entries.set(data.userId, entry);
+    if (wheel.accepting && wheel.keyword && data.comment && data.comment.trim().includes(wheel.keyword) && usr.userId && !wheel.entries.has(usr.userId)) {
+      const entry = { userId: usr.userId, name: usr.nickname, avatar: usr.avatar };
+      wheel.entries.set(usr.userId, entry);
       broadcast(key, 'wheel:update', { entries: Array.from(wheel.entries.values()), count: wheel.entries.size, newEntry: entry });
     }
 
@@ -493,7 +526,7 @@ async function connectRoom(username, sessionid = null) {
     if (pw.active && pw.word && data.comment) {
       const guess = data.comment.trim();
       if (guess === pw.word && !pw.winner) {
-        pw.winner = { userId: data.userId, name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null };
+        pw.winner = { userId: usr.userId, name: usr.nickname, avatar: usr.avatar };
         pw.active = false;
         pw.revealed = new Array(pw.word.length).fill(true);
         broadcast(key, 'password:winner', { winner: pw.winner, word: pw.word });
@@ -505,13 +538,13 @@ async function connectRoom(username, sessionid = null) {
     const wwGame = getWordWarGame(key);
     if (data.comment && (wwGame.active || wwGame.registrationOpen)) {
       const word = data.comment.trim().toLowerCase().replace(/\s+/g,'');
-      const uid = data.userId || data.uniqueId;
+      const uid = usr.userId;
 
-      if (!wwGame.registrationLocked && (word === wwGame.redKeyword || word === wwGame.blueKeyword) && !wwGame.redTeam.has(uid) && !wwGame.blueTeam.has(uid)) {
+      if (uid && !wwGame.registrationLocked && (word === wwGame.redKeyword || word === wwGame.blueKeyword) && !wwGame.redTeam.has(uid) && !wwGame.blueTeam.has(uid)) {
         const team = word === wwGame.redKeyword ? 'red' : 'blue';
         const teamMap = team === 'red' ? wwGame.redTeam : wwGame.blueTeam;
-        teamMap.set(uid, { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, words: [] });
-        broadcast(key, 'word-war:join', { team, player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, redCount: wwGame.redTeam.size, blueCount: wwGame.blueTeam.size });
+        teamMap.set(uid, { name: usr.nickname, avatar: usr.avatar, words: [] });
+        broadcast(key, 'word-war:join', { team, player: usr.nickname, avatar: usr.avatar, redCount: wwGame.redTeam.size, blueCount: wwGame.blueTeam.size });
       }
       else if (wwGame.active) {
         let team = null;
@@ -528,7 +561,7 @@ async function connectRoom(username, sessionid = null) {
               const player = teamMap.get(uid);
               if (player) player.words.push(word);
               if (team === 'red') wwGame.redScore++; else wwGame.blueScore++;
-              broadcast(key, 'word-war:word', { team, word: data.comment.trim(), player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, redScore: wwGame.redScore, blueScore: wwGame.blueScore });
+              broadcast(key, 'word-war:word', { team, word: data.comment.trim(), player: usr.nickname, avatar: usr.avatar, redScore: wwGame.redScore, blueScore: wwGame.blueScore });
             }
           }
         }
@@ -542,11 +575,11 @@ async function connectRoom(username, sessionid = null) {
     const ko = getKnockout(key);
     if (data.comment && ko.phase !== 'idle') {
       const comment = data.comment.trim().toLowerCase().replace(/\s+/g,'');
-      const uid = data.userId || data.uniqueId;
+      const uid = usr.userId;
       // Registration phase
-      if (ko.phase === 'register' && comment === ko.keyword && !ko.players.has(uid) && ko.players.size < ko.maxPlayers) {
-        ko.players.set(uid, { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, alive: true });
-        broadcast(key, 'knockout:joined', { count: ko.players.size, max: ko.maxPlayers, player: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null });
+      if (uid && ko.phase === 'register' && comment === ko.keyword && !ko.players.has(uid) && ko.players.size < ko.maxPlayers) {
+        ko.players.set(uid, { name: usr.nickname, avatar: usr.avatar, alive: true });
+        broadcast(key, 'knockout:joined', { count: ko.players.size, max: ko.maxPlayers, player: usr.nickname, avatar: usr.avatar });
       }
       // Question phase — answer by number
       if (ko.phase === 'question' && ko.currentQuestion) {
@@ -565,13 +598,13 @@ async function connectRoom(username, sessionid = null) {
     if (guessGame.active && !guessGame.transitioning && data.comment) {
       const commentClean = normalizeAr(data.comment);
       const wordClean = normalizeAr(guessGame.word);
-      const alreadyWon = guessGame.winners.some(w => w.userId === data.userId || w.name === (data.nickname || data.uniqueId));
+      const alreadyWon = guessGame.winners.some(w => w.userId === usr.userId || w.name === usr.nickname);
       if (guessGame.winners.length < 5 && commentClean && wordClean && commentClean === wordClean && !alreadyWon) {
-        const uid = data.userId || data.uniqueId;
-        const existing = guessGame.playerStats.get(uid) || { name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, totalWords: 0 };
+        const uid = usr.userId || usr.nickname;
+        const existing = guessGame.playerStats.get(uid) || { name: usr.nickname, avatar: usr.avatar, totalWords: 0 };
         existing.totalWords += 1;
-        existing.name = data.nickname || data.uniqueId;
-        existing.avatar = data.profilePictureUrl || null;
+        existing.name = usr.nickname;
+        existing.avatar = usr.avatar;
         guessGame.playerStats.set(uid, existing);
         const winner = { userId: uid, name: existing.name, avatar: existing.avatar, rank: guessGame.winners.length + 1, word: guessGame.word, totalWords: existing.totalWords };
         guessGame.winners.push(winner);
@@ -587,12 +620,12 @@ async function connectRoom(username, sessionid = null) {
 
     // Quiz check — answer by number (1, 2, 3, 4)
     const quiz = getQuiz(key);
-    if (quiz.active && data.comment) {
+    if (quiz.active && data.comment && usr.userId) {
       const num = parseInt(data.comment.trim());
-      if (num >= 1 && num <= quiz.choices.length && !quiz.answers.has(data.userId)) {
-        quiz.answers.set(data.userId, num - 1);
+      if (num >= 1 && num <= quiz.choices.length && !quiz.answers.has(usr.userId)) {
+        quiz.answers.set(usr.userId, num - 1);
         if (num - 1 === quiz.correctIndex && !quiz.winner) {
-          quiz.winner = { userId: data.userId, name: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null };
+          quiz.winner = { userId: usr.userId, name: usr.nickname, avatar: usr.avatar };
         }
         broadcast(key, 'quiz:answer', { totalAnswers: quiz.answers.size });
       }
@@ -600,10 +633,10 @@ async function connectRoom(username, sessionid = null) {
 
     // Poll check — vote by number (1, 2, 3, ...)
     const poll = getPoll(key);
-    if (poll.active && data.comment) {
+    if (poll.active && data.comment && usr.userId) {
       const num = parseInt(data.comment.trim());
-      if (num >= 1 && num <= poll.options.length && !poll.votes.has(data.userId)) {
-        poll.votes.set(data.userId, num - 1);
+      if (num >= 1 && num <= poll.options.length && !poll.votes.has(usr.userId)) {
+        poll.votes.set(usr.userId, num - 1);
         const results = {};
         poll.options.forEach((_, i) => results[i] = 0);
         poll.votes.forEach(v => { if (results[v] !== undefined) results[v]++; });
@@ -612,24 +645,33 @@ async function connectRoom(username, sessionid = null) {
     }
   });
 
-  tiktok.on('like', (data) => { if (data.totalLikeCount) room.stats.likes = data.totalLikeCount; broadcast(key, 'like', { user: data.nickname || data.uniqueId, totalLikeCount: data.totalLikeCount }); broadcast(key, 'stats', room.stats); });
+  tiktok.on('like', (data) => { const usr = extractUser(data); if (data.totalLikeCount) room.stats.likes = data.totalLikeCount; broadcast(key, 'like', { user: usr.nickname, totalLikeCount: data.totalLikeCount }); broadcast(key, 'stats', room.stats); });
 
   tiktok.on('gift', (data) => {
-    if (data.giftType === 1 && !data.repeatEnd) return;
-    const giftKey = `${data.userId}-${data.giftId}-${data.repeatCount || 1}`;
+    const usr = extractUser(data);
+    const gd = data.giftDetails || {};
+    const g = data.gift || {};
+    const gType = (data.giftType !== undefined) ? data.giftType : (gd.giftType !== undefined ? gd.giftType : g.gift_type);
+    const gRepeatEnd = (data.repeatEnd !== undefined) ? data.repeatEnd : g.repeat_end;
+    if (gType === 1 && !gRepeatEnd) return;
+    const gId = data.giftId || g.id || gd.giftId;
+    const gRepeat = data.repeatCount || g.repeat_count || 1;
+    const gName = data.giftName || gd.giftName || g.name || 'Gift';
+    const gDiamonds = data.diamondCount || gd.diamondCount || g.diamond_count || 0;
+    const giftKey = `${usr.userId}-${gId}-${gRepeat}`;
     const now = Date.now();
     room.recentGifts = room.recentGifts || {};
     if (room.recentGifts[giftKey] && now - room.recentGifts[giftKey] < 2000) return;
     room.recentGifts[giftKey] = now;
     if (Object.keys(room.recentGifts).length > 100) { for (const k in room.recentGifts) { if (now - room.recentGifts[k] > 10000) delete room.recentGifts[k]; } }
-    room.stats.diamonds += (data.diamondCount || 0) * (data.repeatCount || 1);
-    const msg = { type:'gift', user: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, giftName: data.giftName || 'Gift', giftId: data.giftId, repeatCount: data.repeatCount || 1, diamondCount: data.diamondCount || 0, ts: Date.now() };
+    room.stats.diamonds += gDiamonds * gRepeat;
+    const msg = { type:'gift', user: usr.nickname, avatar: usr.avatar, giftName: gName, giftId: gId, repeatCount: gRepeat, diamondCount: gDiamonds, ts: Date.now() };
     storeMsg(key, msg); broadcast(key, 'gift', msg); broadcast(key, 'stats', room.stats);
   });
 
-  tiktok.on('member', (data) => { const msg = { type:'member', user: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, actionId: data.actionId, ts: Date.now() }; if (data.actionId === 1) storeMsg(key, msg); broadcast(key, 'member', msg); });
-  tiktok.on('follow', (data) => { const uid = data.userId || data.uniqueId; if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); } broadcast(key, 'follow', { type:'follow', user: data.nickname || data.uniqueId, avatar: data.profilePictureUrl || null, ts: Date.now() }); });
-  tiktok.on('share', (data) => { room.stats.shares = (room.stats.shares || 0) + 1; broadcast(key, 'share', { type:'share', user: data.nickname || data.uniqueId, ts: Date.now() }); broadcast(key, 'stats', room.stats); });
+  tiktok.on('member', (data) => { const usr = extractUser(data); const msg = { type:'member', user: usr.nickname, avatar: usr.avatar, actionId: data.actionId, ts: Date.now() }; if (data.actionId === 1) storeMsg(key, msg); broadcast(key, 'member', msg); });
+  tiktok.on('follow', (data) => { const usr = extractUser(data); const uid = usr.userId; if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); } broadcast(key, 'follow', { type:'follow', user: usr.nickname, avatar: usr.avatar, ts: Date.now() }); });
+  tiktok.on('share', (data) => { const usr = extractUser(data); room.stats.shares = (room.stats.shares || 0) + 1; broadcast(key, 'share', { type:'share', user: usr.nickname, ts: Date.now() }); broadcast(key, 'stats', room.stats); });
   tiktok.on('roomUser', (data) => { room.stats.viewers = data.viewerCount || room.stats.viewers; broadcast(key, 'viewers', { count: data.viewerCount }); broadcast(key, 'stats', room.stats); });
   tiktok.on('streamEnd', () => { room.status = 'ended'; io.emit('room:status', { username: key, status: 'ended' }); scheduleRetry(key, 30000); });
   tiktok.on('disconnected', () => { if (room.status === 'connected') { room.status = 'disconnected'; io.emit('room:status', { username: key, status: 'disconnected' }); scheduleRetry(key); } });
@@ -1349,9 +1391,21 @@ function createLiveRoom(hostName) {
     quiz: { active: false, question: '', choices: [], correctIndex: -1, answers: new Map(), winner: null, endTime: 0, timer: null },
     guess: { active: false, word: '', hint: '', revealed: [], winners: [], wordPool: [], timer: null },
     knockout: { phase: 'idle', keyword: 'بطولة', maxPlayers: 16, players: new Map(), round: 0, currentQuestion: null },
+    password: { active: false, word: '', revealed: new Set(), winner: null },
+    wordwar: { phase: 'idle', category: '', validWords: [], redKeyword: 'أحمر', blueKeyword: 'أزرق', teams: new Map(), usedWords: new Set(), redScore: 0, blueScore: 0, endTime: 0, timer: null },
   };
   liveRooms.set(code, room);
   return room;
+}
+
+function maskPw(pw) { return [...pw.word].map((c, i) => pw.revealed.has(i) ? c : '_'); }
+function wwCount(ww, team) { let n = 0; ww.teams.forEach(t => { if (t === team) n++; }); return n; }
+function wwEndRound(lr) {
+  const ww = lr.wordwar;
+  if (ww.timer) { clearTimeout(ww.timer); ww.timer = null; }
+  ww.phase = 'ended'; ww.endTime = 0;
+  const winner = ww.redScore > ww.blueScore ? 'red' : ww.blueScore > ww.redScore ? 'blue' : 'tie';
+  io.to(`liveroom:${lr.code}`).emit('room:wordwar-end', { redScore: ww.redScore, blueScore: ww.blueScore, winner });
 }
 
 function getRoomViewerList(room) { return Array.from(room.viewers.values()).map(v => v.name); }
@@ -1397,6 +1451,8 @@ io.on('connection', (socket) => {
       poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
       wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
       quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
+      password: lroom.password.active ? { letters: maskPw(lroom.password) } : null,
+      wordwar: lroom.wordwar.phase !== 'idle' ? { phase: lroom.wordwar.phase, category: lroom.wordwar.category, redKeyword: lroom.wordwar.redKeyword, blueKeyword: lroom.wordwar.blueKeyword, redScore: lroom.wordwar.redScore, blueScore: lroom.wordwar.blueScore, redCount: wwCount(lroom.wordwar, 'red'), blueCount: wwCount(lroom.wordwar, 'blue'), endTime: lroom.wordwar.endTime } : null,
     });
     io.to(`liveroom:${lroom.code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
     io.to(`liveroom:${lroom.code}`).emit('room:activity', { type: 'join', name: viewerName });
@@ -1452,6 +1508,33 @@ io.on('connection', (socket) => {
       g.winners.push({ socketId: socket.id, name, rank: g.winners.length + 1 });
       io.to(`liveroom:${lroom.code}`).emit('room:guess-won', { winner: { name, rank: g.winners.length }, winners: g.winners });
     }
+    // Password guess
+    const pw = lroom.password;
+    if (pw.active && !pw.winner && pw.word && msg.message.trim() === pw.word) {
+      pw.winner = { name }; pw.active = false;
+      io.to(`liveroom:${lroom.code}`).emit('room:password-won', { winner: { name }, word: pw.word });
+    }
+    // Word War: team join
+    const wwG = lroom.wordwar;
+    if (wwG.phase === 'register' && !wwG.teams.has(socket.id)) {
+      const t = msg.message.includes(wwG.redKeyword) ? 'red' : msg.message.includes(wwG.blueKeyword) ? 'blue' : null;
+      if (t) {
+        wwG.teams.set(socket.id, t);
+        io.to(`liveroom:${lroom.code}`).emit('room:wordwar-join', { team: t, player: name, redCount: wwCount(wwG, 'red'), blueCount: wwCount(wwG, 'blue') });
+      }
+    }
+    // Word War: word scoring
+    if (wwG.phase === 'playing' && wwG.endTime > Date.now()) {
+      const team = wwG.teams.get(socket.id);
+      if (team) {
+        const w = msg.message.trim().toLowerCase().replace(/\s+/g, '');
+        if (w.length >= 2 && !wwG.usedWords.has(w) && (wwG.validWords.length === 0 || wwG.validWords.includes(w))) {
+          wwG.usedWords.add(w);
+          if (team === 'red') wwG.redScore++; else wwG.blueScore++;
+          io.to(`liveroom:${lroom.code}`).emit('room:wordwar-word', { team, word: msg.message.trim(), player: name, redScore: wwG.redScore, blueScore: wwG.blueScore });
+        }
+      }
+    }
     // Knockout join
     const ko = lroom.knockout;
     if (ko.phase === 'register' && msg.message.includes(ko.keyword) && !ko.players.has(socket.id) && ko.players.size < ko.maxPlayers) {
@@ -1504,6 +1587,15 @@ io.on('connection', (socket) => {
   socket.on('room:knockout-ask', ({ code, question, options, correct, answerTime }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ko=lr.knockout;ko.phase='question';ko.round++;ko.currentQuestion={question,options,correct:parseInt(correct),answerTime:parseInt(answerTime)||15,answers:new Map()}; const alive=Array.from(ko.players.values()).filter(p=>p.alive).length; io.to(`liveroom:${lr.code}`).emit('room:knockout-question',{question,options:options||[],round:ko.round,alivePlayers:alive,answerTime:ko.currentQuestion.answerTime}); });
   socket.on('room:knockout-reveal', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ko=lr.knockout;const q=ko.currentQuestion;if(!q)return; const elim=[];ko.players.forEach((p,sid)=>{if(!p.alive)return;if(q.answers.get(sid)!==q.correct){p.alive=false;elim.push({name:p.name});}}); const alive=Array.from(ko.players.values()).filter(p=>p.alive); const winner=alive.length<=1?(alive[0]?{name:alive[0].name}:null):null; io.to(`liveroom:${lr.code}`).emit('room:knockout-reveal',{correct:q.correct,eliminated:elim,aliveCount:alive.length,winner}); });
   socket.on('room:knockout-stop', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return;lr.knockout.phase='idle'; io.to(`liveroom:${lr.code}`).emit('room:knockout-stopped',{}); });
+  // ── Password (host) ──
+  socket.on('room:password-start', ({ code, word }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const w=(word||'').trim(); if(w.length<2)return socket.emit('room:error-soft',{message:'كلمة السر قصيرة'}); const pw=lr.password; pw.word=w; pw.winner=null; pw.active=true; pw.revealed=new Set([0,w.length-1]); io.to(`liveroom:${lr.code}`).emit('room:password-update',{letters:maskPw(pw)}); });
+  socket.on('room:password-reveal', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const pw=lr.password; if(!pw.active)return; const hidden=[...pw.word].map((_,i)=>i).filter(i=>!pw.revealed.has(i)); if(!hidden.length)return; pw.revealed.add(hidden[Math.floor(Math.random()*hidden.length)]); io.to(`liveroom:${lr.code}`).emit('room:password-update',{letters:maskPw(pw)}); });
+  socket.on('room:password-stop', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const pw=lr.password; pw.active=false; io.to(`liveroom:${lr.code}`).emit('room:password-stopped',{word:pw.word}); });
+  // ── Word War (host) ──
+  socket.on('room:wordwar-open', ({ code, category, redKeyword, blueKeyword, validWords }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ww=lr.wordwar; if(ww.timer){clearTimeout(ww.timer);ww.timer=null;} ww.phase='register'; ww.category=(category||'').trim(); ww.redKeyword=(redKeyword||'أحمر').trim(); ww.blueKeyword=(blueKeyword||'أزرق').trim(); ww.validWords=(validWords||[]).map(w=>String(w).trim().toLowerCase().replace(/\s+/g,'')).filter(Boolean); io.to(`liveroom:${lr.code}`).emit('room:wordwar-open',{category:ww.category,redKeyword:ww.redKeyword,blueKeyword:ww.blueKeyword,redScore:ww.redScore,blueScore:ww.blueScore,redCount:wwCount(ww,'red'),blueCount:wwCount(ww,'blue')}); });
+  socket.on('room:wordwar-start', ({ code, duration }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ww=lr.wordwar; if(ww.teams.size<2)return socket.emit('room:error-soft',{message:'يحتاج لاعبين في الفريقين'}); if(ww.timer){clearTimeout(ww.timer);} ww.phase='playing'; ww.usedWords.clear(); const d=Math.min(Math.max(parseInt(duration)||60,15),300); ww.endTime=Date.now()+d*1000; io.to(`liveroom:${lr.code}`).emit('room:wordwar-start',{category:ww.category,duration:d,endTime:ww.endTime,redScore:ww.redScore,blueScore:ww.blueScore,redCount:wwCount(ww,'red'),blueCount:wwCount(ww,'blue')}); ww.timer=setTimeout(()=>wwEndRound(lr),d*1000); });
+  socket.on('room:wordwar-stop', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; if(lr.wordwar.phase==='playing'||lr.wordwar.phase==='register') wwEndRound(lr); });
+  socket.on('room:wordwar-reset', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; const ww=lr.wordwar; if(ww.timer){clearTimeout(ww.timer);ww.timer=null;} ww.phase='idle'; ww.redScore=0; ww.blueScore=0; ww.teams.clear(); ww.usedWords.clear(); ww.endTime=0; io.to(`liveroom:${lr.code}`).emit('room:wordwar-reset',{}); });
   socket.on('room:close', ({ code }) => { const lr=liveRooms.get((code||'').toUpperCase());if(!lr||!socket._isHost)return; io.to(`liveroom:${lr.code}`).emit('room:closed',{message:'أغلق المضيف الغرفة'});liveRooms.delete(lr.code); });
 
   // Cleanup on disconnect
