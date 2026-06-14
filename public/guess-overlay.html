@@ -204,7 +204,7 @@
 <body>
 
 <div class="main-box" id="main-box">
-  <div class="game-title">💡 خمّن <span>الكلمة</span>!</div>
+<div class="game-title">💡 خمّن <span>الكلمة</span>!</div>
   <div class="letters-row" id="letters-row"></div>
   <div class="hint-text" id="hint-text"></div>
   <div class="divider"></div>
@@ -232,7 +232,8 @@
 <script>
 const params   = new URLSearchParams(location.search);
 const username = params.get('username') || '';
-const socket   = io({ reconnection: true, reconnectionDelay: 500, reconnectionAttempts: Infinity });
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket   = io({ auth: __auth, reconnection: true, reconnectionDelay: 500, reconnectionAttempts: Infinity });
 let nwTimer    = null;
 let hideTimer  = null;
 let winners    = [];

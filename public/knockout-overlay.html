@@ -70,7 +70,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </head>
 <body>
 <div class="main" id="box">
-  <div class="title">🏆 <span>بطولة خروج</span></div>
+<div class="title">🏆 <span>بطولة خروج</span></div>
   <div class="phase-label" id="phase-label"></div>
   <div class="stats-row" id="stats-row" style="display:none">
     <div class="stat"><div class="stat-num" id="alive-num">0</div><div class="stat-label">باقي</div></div>
@@ -98,7 +98,8 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 <script>
 if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-var socket=io();if(username)socket.emit('join',{username});
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+var socket=io({ auth: __auth });if(username)socket.emit('join',{username});
 var timerInt=null,COLORS=['#ef4444','#fbbf24','#1dba72','#3b82f6','#a855f7','#ec4899'];
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 

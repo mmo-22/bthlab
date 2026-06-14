@@ -78,7 +78,15 @@
   <div class="back"><a href="/admin.html">← رجوع للأدمن</a></div>
 </div>
 <script>
-const pw = new URLSearchParams(location.search).get('pw') || localStorage.getItem('owner_password') || '';
+const _sp = new URLSearchParams(location.search);
+const _urlPw = _sp.get('pw');
+if (_urlPw) {
+  localStorage.setItem('owner_password', _urlPw);
+  const cu = new URL(location.href);
+  cu.searchParams.delete('pw');
+  history.replaceState({}, '', cu.pathname + (cu.search || '') + (cu.hash || ''));
+}
+const pw = _urlPw || localStorage.getItem('owner_password') || '';
 
 async function loadSubs() {
   const res = await fetch('/api/subscribers?pw=' + encodeURIComponent(pw));

@@ -69,7 +69,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </head>
 <body>
 <div class="main-box" id="box">
-  <div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
+<div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
   <div class="category-bar" id="category">—</div>
   <div id="join-keywords" style="display:none;text-align:center;font-size:calc(13px * var(--scale));margin-bottom:calc(10px * var(--scale));color:rgba(255,255,255,.6);font-weight:500"></div>
   <div class="scoreboard">
@@ -106,7 +106,8 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 const params = new URLSearchParams(location.search);
 const cfg = { username: params.get('username') || '' };
-const socket = io({ transports:['websocket','polling'], reconnection:true });
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket = io({ auth: __auth, transports:['websocket','polling'], reconnection:true });
 let timerInt = null, endTime = 0, totalDuration = 60;
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

@@ -149,6 +149,11 @@ input[type=text]:focus, select:focus { border-color:var(--accent2); }
   .controls{flex-direction:column;gap:6px}
   .controls .btn{font-size:13px}
 }
+
+  .open-overlay-btn { display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:900; padding:9px 16px; border-radius:10px; cursor:pointer; text-decoration:none; transition:.2s; box-shadow:0 8px 20px -8px #8b5cf6; }
+  .open-overlay-btn:hover { transform:translateY(-2px); box-shadow:0 12px 26px -8px #8b5cf6; }
+  .overlay-actions { display:flex; gap:8px; align-items:stretch; margin-top:6px; flex-wrap:wrap; }
+  .overlay-actions .overlay-link { flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -237,16 +242,31 @@ input[type=text]:focus, select:focus { border-color:var(--accent2); }
   <!-- Overlay link -->
   <div class="card">
     <div class="card-title">رابط العجلة لـ OBS</div>
-    <div class="overlay-link" id="overlay-link" onclick="copyLink()">...</div>
+    <div class="overlay-actions"><div class="overlay-link" id="overlay-link" onclick="copyLink()">...</div><a class="open-overlay-btn" href="#" id="open-overlay-link" target="_blank" rel="noopener" onclick="return openOverlayInNewTab(this)">🚀 فتح الأوفرلاي</a></div>
     <div style="font-size:12px;color:var(--muted);margin-top:6px">اضغط لنسخ الرابط — أضفه كـ Browser Source في OBS</div>
   </div>
 
 </div>
 
 <script>
+
+// 🔒 sanitize URL — حفظ المفاتيح وتنظيف الرابط
+(function(){
+  var p = new URLSearchParams(location.search);
+  var k = p.get('key'), pw = p.get('pw');
+  if (k) localStorage.setItem('subscription_key', k);
+  if (pw) localStorage.setItem('owner_password', pw);
+  if (k || pw) {
+    var cu = new URL(location.href);
+    cu.searchParams.delete('key'); cu.searchParams.delete('pw');
+    history.replaceState({}, '', cu.pathname + (cu.search || '') + (cu.hash || ''));
+  }
+})();
+
 const params   = new URLSearchParams(location.search);
 const username = params.get('username') || params.get('user') || '';
-const socket   = io();
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket   = io({ auth: __auth });
 
 let entries     = [];
 let currentWinner = null;
@@ -489,6 +509,27 @@ function escHtml(s) {
 
 // Enter لإضافة يدوية
 document.getElementById('manual-name').addEventListener('keydown', e => { if (e.key === 'Enter') addManual(); });
+
+// ── Open overlay in new tab (BthLab) ───────────────────
+function openOverlayInNewTab(a) {
+  var el = document.getElementById('overlay-link');
+  var url = (el && el.textContent || '').trim();
+  if (!url || url.indexOf('http') !== 0) {
+    alert('اتصل بالبث أولاً للحصول على رابط الأوفرلاي');
+    return false;
+  }
+  a.href = url;
+  return true;
+}
+// حدّث href تلقائياً إذا تغيّر النص (مرّة كل ثانية يكفي ولا يحمّل شي)
+setInterval(function() {
+  var el = document.getElementById('overlay-link');
+  var btn = document.getElementById('open-overlay-link');
+  if (!el || !btn) return;
+  var url = (el.textContent || '').trim();
+  if (url.indexOf('http') === 0 && btn.getAttribute('href') !== url) btn.setAttribute('href', url);
+}, 1000);
+
 </script>
 <div style="text-align:center;padding:20px 16px;font-size:11px;color:#444;margin-top:24px;border-top:1px solid rgba(255,255,255,.06);width:100%">© 2026 BthLab. جميع الحقوق محفوظة.</div>
 </body>

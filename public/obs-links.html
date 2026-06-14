@@ -82,8 +82,20 @@ input[type=text]:focus{border-color:var(--accent2)}
 
 <script>
 const params = new URLSearchParams(location.search);
-const KEY = params.get('key') || '';
-const PW  = params.get('pw') || '';
+
+// 🔒 حفظ المفتاح وتنظيف الرابط
+const _urlKey = params.get('key');
+const _urlPw = params.get('pw');
+if (_urlKey) localStorage.setItem('subscription_key', _urlKey);
+if (_urlPw) localStorage.setItem('owner_password', _urlPw);
+if (_urlKey || _urlPw) {
+  const cu = new URL(location.href);
+  cu.searchParams.delete('key'); cu.searchParams.delete('pw');
+  history.replaceState({}, '', cu.pathname + (cu.search || '') + (cu.hash || ''));
+}
+
+const KEY = _urlKey || localStorage.getItem('subscription_key') || '';
+const PW  = _urlPw  || localStorage.getItem('owner_password') || '';
 const authPart = KEY ? '&key=' + encodeURIComponent(KEY) : (PW ? '&pw=' + encodeURIComponent(PW) : '');
 document.getElementById('username').value = (params.get('username') || '').replace('@','');
 document.getElementById('back-link').href = 'admin.html?' + (KEY ? 'key=' + encodeURIComponent(KEY) : (PW ? 'mode=owner&pw=' + encodeURIComponent(PW) : ''));

@@ -29,7 +29,7 @@ body.mobile{transform:scale(0.55);transform-origin:center center;}
 <body>
 <div id="container">
   <div class="poll-card">
-    <div class="poll-question" id="question">🎯 التصويت</div>
+<div class="poll-question" id="question">🎯 التصويت</div>
     <div class="poll-options" id="options"></div>
     <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
     <div class="vote-count" id="vote-count">0 صوت</div>
@@ -41,7 +41,8 @@ if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classL
 const params = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey = params.get('key') || '';
-const socket = io();
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket = io({ auth: __auth });
 let timerInterval = null;
 let endTime = 0;
 let totalTime = 60;

@@ -207,14 +207,20 @@
     font-weight: 900 !important;
     text-transform: uppercase;
   }
-</style>
+
+  .beta-badge { display:inline-block; font-size:11px; font-weight:900; color:#fbbf24; background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.4); padding:4px 11px; border-radius:99px; vertical-align:middle; margin-inline-start:8px; animation:betaPulse 2.5s ease-in-out infinite; }
+  @keyframes betaPulse { 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,.3)} 50%{box-shadow:0 0 0 6px rgba(251,191,36,0)} }
+  .beta-notice { margin-top:10px; font-size:12px; color:#fbbf24; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.22); border-radius:11px; padding:9px 14px; line-height:1.7; }
+
+  </style>
 </head>
 <body>
 
 <div class="container">
   <div class="logo">
-    <h1>🎮 الغرف التفاعلية</h1>
+    <h1>🎮 الغرف التفاعلية <span class="beta-badge">🧪 تجريبية</span></h1>
     <p>أنشئ غرفة وشارك الرابط مع جمهورك</p>
+    <div class="beta-notice">⚠️ هذه الميزة في مرحلة تجريبية — قد تواجه بعض الأخطاء، نرحب بملاحظاتك على واتساب الدعم</div>
   </div>
 
   <div class="tabs">

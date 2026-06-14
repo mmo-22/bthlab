@@ -101,6 +101,11 @@
   .player-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px}
   .player-row .name{flex:1;font-weight:600;color:var(--text)}
   .player-row .count{color:var(--muted);font-weight:700}
+
+  .open-overlay-btn { display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:900; padding:9px 16px; border-radius:10px; cursor:pointer; text-decoration:none; transition:.2s; box-shadow:0 8px 20px -8px #8b5cf6; }
+  .open-overlay-btn:hover { transform:translateY(-2px); box-shadow:0 12px 26px -8px #8b5cf6; }
+  .overlay-actions { display:flex; gap:8px; align-items:stretch; margin-top:6px; flex-wrap:wrap; }
+  .overlay-actions .overlay-link { flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -212,13 +217,27 @@
   <div class="card">
     <div class="card-title">🔗 رابط الـ Overlay</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <div class="overlay-link" id="overlay-link" style="flex:1">—</div>
+      <div class="overlay-actions"><div class="overlay-link" id="overlay-link" style="flex:1">—</div><a class="open-overlay-btn" href="#" id="open-overlay-link" target="_blank" rel="noopener" onclick="return openOverlayInNewTab(this)">🚀 فتح الأوفرلاي</a></div>
       <button class="btn" onclick="copyLink()" style="background:var(--accent2);color:#000;padding:10px 16px;font-size:13px">📋 نسخ</button>
     </div>
   </div>
 </div>
 
 <script>
+
+// 🔒 sanitize URL — حفظ المفاتيح وتنظيف الرابط
+(function(){
+  var p = new URLSearchParams(location.search);
+  var k = p.get('key'), pw = p.get('pw');
+  if (k) localStorage.setItem('subscription_key', k);
+  if (pw) localStorage.setItem('owner_password', pw);
+  if (k || pw) {
+    var cu = new URL(location.href);
+    cu.searchParams.delete('key'); cu.searchParams.delete('pw');
+    history.replaceState({}, '', cu.pathname + (cu.search || '') + (cu.hash || ''));
+  }
+})();
+
 const CATEGORIES = [
   {name:"فواكه",icon:"🍎",words:["تفاح","موز","برتقال","عنب","فراولة","مانجو","اناناس","بطيخ","رمان","كيوي","تين","خوخ","مشمش","كرز","توت","جوافة","كمثرى","ليمون","بابايا","جريب فروت","تمر","زيتون","افوكادو","يوسفي","نارنج","كاكا","تفاح اخضر","توت ارضي","شمام","كنتالوب","نكتارين","دراقن","جوز هند","صبار","ليتشي","باشن فروت","تانجرين","جاك فروت","رامبوتان","دوريان"]},
   {name:"خضار",icon:"🥬",words:["طماطم","خيار","بصل","ثوم","جزر","بطاطس","فلفل","باذنجان","كوسة","ملفوف","بروكلي","سبانخ","ذرة","فجل","بقدونس","نعناع","جرجير","خس","بامية","ملوخية","كزبرة","شبت","زنجبيل","فطر","قرع","بازلاء","لوبيا","فاصوليا","شمندر","كرفس","هليون","زهرة","بطاطا حلوة","فقع","خرشوف","سلق","رجلة","جرجير مائي","كرنب","فلفل حار"]},
@@ -265,7 +284,8 @@ const CATEGORIES = [
 
 const params = new URLSearchParams(location.search);
 let username = params.get('username') || '';
-const socket = io({ transports:['websocket','polling'], reconnection:true });
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket = io({ auth: __auth, transports:['websocket','polling'], reconnection:true });
 if (username) socket.emit('join', { username });
 
 document.getElementById('username-input').value = username;
@@ -587,6 +607,27 @@ function setActive(on){document.getElementById('status-badge').classList.toggle(
 
 if(username){fetch(`/api/word-war/${username}`).then(r=>r.json()).then(d=>{renderHistory(d.roundHistory||[]);});}
 renderCatGrid();
+
+// ── Open overlay in new tab (BthLab) ───────────────────
+function openOverlayInNewTab(a) {
+  var el = document.getElementById('overlay-link');
+  var url = (el && el.textContent || '').trim();
+  if (!url || url.indexOf('http') !== 0) {
+    alert('اتصل بالبث أولاً للحصول على رابط الأوفرلاي');
+    return false;
+  }
+  a.href = url;
+  return true;
+}
+// حدّث href تلقائياً إذا تغيّر النص (مرّة كل ثانية يكفي ولا يحمّل شي)
+setInterval(function() {
+  var el = document.getElementById('overlay-link');
+  var btn = document.getElementById('open-overlay-link');
+  if (!el || !btn) return;
+  var url = (el.textContent || '').trim();
+  if (url.indexOf('http') === 0 && btn.getAttribute('href') !== url) btn.setAttribute('href', url);
+}, 1000);
+
 </script>
 </body>
 </html>

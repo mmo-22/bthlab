@@ -114,7 +114,7 @@
 </div>
 
 <div class="wheel-wrap" id="wheel-wrap" style="display:none">
-  <div class="pointer"></div>
+<div class="pointer"></div>
   <canvas id="wheel-canvas" width="500" height="500"></canvas>
 </div>
 
@@ -129,7 +129,8 @@
 const params   = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey  = params.get('key') || '';
-const socket   = io();
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket   = io({ auth: __auth });
 
 // Mobile mode
 if (params.get('mobile') === '1' || params.get('mobile') === 'true') {

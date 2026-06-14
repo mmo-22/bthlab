@@ -136,6 +136,8 @@
   .gift-pop .ginfo { display: flex; flex-direction: column; }
   .gift-pop .gu { font-size: 12px; font-weight: 700; color: #f59e0b; }
   .gift-pop .gn { font-size: 11px; color: rgba(255,255,255,.7); }
+/* لما الإحصائيات معطّلة، نخلي الووترمارك يقف لحاله بنفس ستايل الشريط */
+  
 </style>
 </head>
 <body>
@@ -154,7 +156,8 @@ const authKey = params.get('key') || '';
 const maxMessages = parseInt(params.get('max') || '8');
 const side = (params.get('side') || 'right').toLowerCase();
 const showStats = params.get('stats') !== '0';
-const socket = io();
+const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const socket = io({ auth: __auth });
 
 document.getElementById('feed').classList.add('side-' + side);
 document.getElementById('stats-bar').classList.add('side-' + side);
