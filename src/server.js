@@ -20,10 +20,21 @@ const io = new Server(httpServer, {
 
 app.use(express.json({ limit: '2mb' }));
 
+// ── Simple cookie parser (no external deps) ──────────────
+app.use((req, res, next) => {
+  req.cookies = {};
+  const h = req.headers.cookie;
+  if (h) h.split(';').forEach(c => {
+    const i = c.indexOf('=');
+    if (i > 0) req.cookies[c.slice(0, i).trim()] = decodeURIComponent(c.slice(i + 1).trim());
+  });
+  next();
+});
+
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.3.0';
+const VERSION = '2.4.7';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -277,7 +288,7 @@ app.post('/api/subscribers/change-username', (req, res) => {
     if (oldRoom.retryTimer) clearTimeout(oldRoom.retryTimer);
     if (oldRoom.tiktok) { try { oldRoom.tiktok.disconnect(); } catch(_) {} }
     delete rooms[sub.tiktokUsername];
-    io.emit('room:status', { username: sub.tiktokUsername, status: 'removed' });
+    io.to(`room:${sub.tiktokUsername}`).emit('room:status', { username: sub.tiktokUsername, status: 'removed' });
   }
   sub.tiktokUsername = newUsername;
   saveSubscribers(subscribers);
@@ -386,16 +397,44 @@ app.get('/api/my-links', (req, res) => {
 });
 
 // ── Auth middleware (protect pages) ──────────────────────
+// ── Auth: cookies primary, query string fallback ─────────
+// لما المستخدم يصل برابط فيه ?key= أو ?pw=، نحفظهم في cookies HttpOnly
+// عشان الطلبات اللاحقة ما تحتاجهم في الـ URL — يبقى الرابط نظيف بدون كشف
+function setAuthCookie(res, name, value) {
+  // 30 يوم، HttpOnly (محمي من JS)، SameSite=Lax (يشتغل مع التنقل العادي)
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', (res.getHeader('Set-Cookie') || [])
+    .concat(`${name}=${encodeURIComponent(value)}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax${secure}`));
+}
+
 function requireAuth(req, res, next) {
-  const key = req.query.key || '';
-  const pw = req.query.pw || '';
+  const qKey = req.query.key || '';
+  const qPw = req.query.pw || '';
+  const cKey = req.cookies.bthlab_key || '';
+  const cPw = req.cookies.bthlab_pw || '';
+  const key = qKey || cKey;
+  const pw = qPw || cPw;
+
   // Owner bypass
-  if (pw === OWNER_PASSWORD) return next();
+  if (pw === OWNER_PASSWORD) {
+    if (qPw && !cPw) setAuthCookie(res, 'bthlab_pw', pw);
+    return next();
+  }
   // Subscriber check
   const sub = subscribers[key];
   if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) return res.redirect('/login.html');
+  if (qKey && !cKey) setAuthCookie(res, 'bthlab_key', key);
   next();
 }
+
+// مسار تسجيل الخروج — يمسح cookies
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', [
+    'bthlab_key=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+    'bthlab_pw=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+  ]);
+  res.json({ ok: true });
+});
 
 // Redirect root to landing page
 // index.html served automatically by express.static
@@ -410,7 +449,9 @@ app.get('/knockout.html', requireAuth, (req, res) => res.sendFile(path.join(__di
 app.get('/quiz.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/quiz.html')));
 app.get('/poll.html', requireAuth, (req, res) => res.sendFile(path.join(__dirname, '../public/poll.html')));
 app.get('/subscriptions.html', (req, res) => {
-  if (req.query.pw !== OWNER_PASSWORD) return res.redirect('/login.html');
+  const pw = req.query.pw || req.cookies.bthlab_pw || '';
+  if (pw !== OWNER_PASSWORD) return res.redirect('/login.html');
+  if (req.query.pw && !req.cookies.bthlab_pw) setAuthCookie(res, 'bthlab_pw', pw);
   res.sendFile(path.join(__dirname, '../public/subscriptions.html'));
 });
 
@@ -479,7 +520,7 @@ async function connectRoom(username, sessionid = null) {
   if (room.tiktok) { try { room.tiktok.disconnect(); } catch(_) {} room.tiktok = null; }
 
   room.status = 'connecting';
-  io.emit('room:status', { username: key, status: 'connecting' });
+  io.to(`room:${key}`).emit('room:status', { username: key, status: 'connecting' });
   console.log(`[TikTok] Connecting to @${key}...`);
 
   const opts = { processInitialData: false, enableExtendedGiftInfo: true, signApiKey: process.env.EULER_API_KEY || SignConfig.apiKey };
@@ -492,7 +533,7 @@ async function connectRoom(username, sessionid = null) {
     room.status = 'connected'; room.retryCount = 0;
     room.stats.viewers = state.viewerCount || 0;
     console.log(`[TikTok] Connected @${key}`);
-    io.emit('room:status', { username: key, status: 'connected', viewers: state.viewerCount });
+    io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers: state.viewerCount });
     broadcast(key, 'stats', room.stats);
   } catch(err) {
     const msg = err.message || '';
@@ -503,7 +544,7 @@ async function connectRoom(username, sessionid = null) {
     else if (msg.includes('403')) userMsg = 'تيك توك رفض الاتصال — جاري إعادة المحاولة';
     console.log(`[TikTok] Failed @${key}: ${msg}`);
     room.status = 'error';
-    io.emit('room:status', { username: key, status: 'error', message: userMsg, technical: msg });
+    io.to(`room:${key}`).emit('room:status', { username: key, status: 'error', message: userMsg, technical: msg });
     scheduleRetry(key);
     return;
   }
@@ -673,8 +714,8 @@ async function connectRoom(username, sessionid = null) {
   tiktok.on('follow', (data) => { const usr = extractUser(data); const uid = usr.userId; if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); } broadcast(key, 'follow', { type:'follow', user: usr.nickname, avatar: usr.avatar, ts: Date.now() }); });
   tiktok.on('share', (data) => { const usr = extractUser(data); room.stats.shares = (room.stats.shares || 0) + 1; broadcast(key, 'share', { type:'share', user: usr.nickname, ts: Date.now() }); broadcast(key, 'stats', room.stats); });
   tiktok.on('roomUser', (data) => { room.stats.viewers = data.viewerCount || room.stats.viewers; broadcast(key, 'viewers', { count: data.viewerCount }); broadcast(key, 'stats', room.stats); });
-  tiktok.on('streamEnd', () => { room.status = 'ended'; io.emit('room:status', { username: key, status: 'ended' }); scheduleRetry(key, 30000); });
-  tiktok.on('disconnected', () => { if (room.status === 'connected') { room.status = 'disconnected'; io.emit('room:status', { username: key, status: 'disconnected' }); scheduleRetry(key); } });
+  tiktok.on('streamEnd', () => { room.status = 'ended'; io.to(`room:${key}`).emit('room:status', { username: key, status: 'ended' }); scheduleRetry(key, 30000); });
+  tiktok.on('disconnected', () => { if (room.status === 'connected') { room.status = 'disconnected'; io.to(`room:${key}`).emit('room:status', { username: key, status: 'disconnected' }); scheduleRetry(key); } });
   tiktok.on('error', () => scheduleRetry(key));
 }
 
@@ -682,11 +723,11 @@ function scheduleRetry(key, delay = 5000) {
   const room = rooms[key]; if (!room || room.status === 'offline') return;
   if (room.retryTimer) clearTimeout(room.retryTimer);
   room.retryCount = (room.retryCount || 0) + 1;
-  if (room.retryCount > 30) { room.status = 'offline'; io.emit('room:status', { username: key, status: 'offline', message: 'توقف الاتصال بعد عدة محاولات — اضغط اتصال مرة ثانية' }); return; }
+  if (room.retryCount > 30) { room.status = 'offline'; io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: 'توقف الاتصال بعد عدة محاولات — اضغط اتصال مرة ثانية' }); return; }
   const actualDelay = Math.min(delay * Math.pow(1.5, Math.min(room.retryCount - 1, 6)), 60000);
   room.status = 'retrying';
   console.log(`[TikTok] Retry #${room.retryCount} for @${key} in ${Math.round(actualDelay/1000)}s`);
-  io.emit('room:status', { username: key, status: 'retrying', retry: room.retryCount, message: `إعادة محاولة ${room.retryCount}/30 بعد ${Math.round(actualDelay/1000)} ثانية` });
+  io.to(`room:${key}`).emit('room:status', { username: key, status: 'retrying', retry: room.retryCount, message: `إعادة محاولة ${room.retryCount}/30 بعد ${Math.round(actualDelay/1000)} ثانية` });
   room.retryTimer = setTimeout(() => connectRoom(key), actualDelay);
 }
 
@@ -964,10 +1005,13 @@ function revealKnockout(key) {
   const q = ko.currentQuestion; if (!q) return;
   ko.phase = 'reveal';
   const eliminated = [];
+  // q.correct يأتي 1-based من صفحة التحكم، وإجابات المشاهدين تُحفظ 0-based (num-1)
+  // لذلك نحوّل q.correct إلى 0-based للمقارنة
+  const correctIdx = q.correct - 1;
   ko.players.forEach((p, uid) => {
     if (!p.alive) return;
     const ans = q.answers.get(uid);
-    if (ans === undefined || ans !== q.correct) { p.alive = false; eliminated.push({ name: p.name, avatar: p.avatar }); }
+    if (ans === undefined || ans !== correctIdx) { p.alive = false; eliminated.push({ name: p.name, avatar: p.avatar }); }
   });
   const alive = Array.from(ko.players.values()).filter(p => p.alive);
   const winner = alive.length <= 1 ? (alive[0] || null) : null;
@@ -1256,7 +1300,7 @@ app.post('/api/disconnect', (req, res) => {
   if (room.retryTimer) clearTimeout(room.retryTimer);
   if (room.tiktok) { try { room.tiktok.disconnect(); } catch(_) {} }
   delete rooms[key];
-  io.emit('room:status', { username: key, status: 'removed' });
+  io.to(`room:${key}`).emit('room:status', { username: key, status: 'removed' });
   res.json({ ok: true });
 });
 
@@ -1279,10 +1323,32 @@ app.get('/api/rooms', (req, res) => {
 });
 
 // ── Socket.IO ────────────────────────────────────────────
+// مساعد: استخراج مفتاح/باسورد من كوكي السوكت
+function parseSocketCookie(socket) {
+  const h = socket.handshake.headers.cookie || '';
+  const out = {};
+  h.split(';').forEach(c => { const i = c.indexOf('='); if (i > 0) out[c.slice(0, i).trim()] = decodeURIComponent(c.slice(i + 1).trim()); });
+  return out;
+}
+
 io.on('connection', (socket) => {
+  // اقرأ هوية السوكت من الكوكي (مرة واحدة عند الاتصال)
+  const ck = parseSocketCookie(socket);
+  const subKey = ck.bthlab_key || socket.handshake.auth?.key || '';
+  const ownerPw = ck.bthlab_pw || socket.handshake.auth?.pw || '';
+  socket._isOwner = ownerPw && ownerPw === OWNER_PASSWORD;
+  socket._sub = subKey && subscribers[subKey] && subscribers[subKey].active && new Date(subscribers[subKey].expiresAt) >= new Date() ? subscribers[subKey] : null;
+
   socket.on('join', ({ username }) => {
     const key = username?.toLowerCase().replace('@', '').trim();
     if (!key) return;
+    // 🔒 تحقق: المشترك يقدر ينضم فقط لقناة اليوزرنيم المسجّل عنده، المالك يقدر ينضم لأي قناة
+    if (!socket._isOwner) {
+      if (!socket._sub || socket._sub.tiktokUsername !== key) {
+        // محاولة انضمام لقناة غير مسموحة — تجاهل بصمت
+        return;
+      }
+    }
     socket.rooms.forEach(room => { if (room.startsWith('room:') && room !== `room:${key}`) socket.leave(room); });
     socket.join(`room:${key}`);
     const room = rooms[key];
