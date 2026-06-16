@@ -107,7 +107,16 @@ if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classL
 const params = new URLSearchParams(location.search);
 const cfg = { username: params.get('username') || '' };
 const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
-const socket = io({ auth: __auth, transports:['websocket','polling'], reconnection:true });
+const socket = io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
+
+// auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
+socket.on('connect', function() {
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+});
+socket.io.on('reconnect', function() {
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+});
+
 let timerInt = null, endTime = 0, totalDuration = 60;
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

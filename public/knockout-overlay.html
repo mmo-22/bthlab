@@ -99,7 +99,16 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
 const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
-var socket=io({ auth: __auth });if(username)socket.emit('join',{username});
+var socket=io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
+
+// auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
+socket.on('connect', function() {
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+});
+socket.io.on('reconnect', function() {
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+});
+if(username)socket.emit('join',{username});
 var timerInt=null,COLORS=['#ef4444','#fbbf24','#1dba72','#3b82f6','#a855f7','#ec4899'];
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 

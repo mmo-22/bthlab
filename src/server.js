@@ -12,10 +12,15 @@ const fs = require('fs');
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*' },
+  cors: { origin: '*', credentials: false },
   transports: ['websocket', 'polling'],
   pingInterval: 25000,
   pingTimeout: 20000,
+  // تحسينات لـ TikTok LIVE Studio و OBS Browser Source (WebView محدودة)
+  allowEIO3: true,           // توافق مع عملاء قدماء
+  maxHttpBufferSize: 1e6,    // 1MB يكفي للأحداث العادية
+  perMessageDeflate: false,  // تعطيل الضغط — أسرع للأحداث الصغيرة المتكررة
+  httpCompression: false,    // نفس السبب
 });
 
 app.use(express.json({ limit: '2mb' }));
@@ -34,7 +39,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.4.7';
+const VERSION = '2.5.3';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -234,9 +239,19 @@ app.post('/api/recover-key', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── 🟢 تتبع المشتركين المتصلين (للوحة المالك) ───────────
+// key → Set من socket IDs (مشترك قد يفتح أكثر من تاب)
+const onlineSubs = new Map();
+function isOnline(key) { const s = onlineSubs.get(key); return !!(s && s.size > 0); }
+
 app.get('/api/subscribers', (req, res) => {
   if (req.query.pw !== OWNER_PASSWORD) return res.status(403).json({ error: 'غير مصرح' });
-  const list = Object.entries(subscribers).map(([key, v]) => ({ key, ...v, isExpired: new Date(v.expiresAt) < new Date() }));
+  const list = Object.entries(subscribers).map(([key, v]) => ({
+    key, ...v,
+    isExpired: new Date(v.expiresAt) < new Date(),
+    online: isOnline(key),
+    tabs: (onlineSubs.get(key)?.size) || 0,
+  }));
   res.json(list);
 });
 
@@ -343,11 +358,22 @@ app.get('/api/messages', (req, res) => {
 
 app.post('/api/subscribers/add', (req, res) => {
   if (req.body.pw !== OWNER_PASSWORD) return res.status(403).json({});
-  const key = generateKey();
+  // مفتاح مخصص اختياري — يسمح بإعادة استخدام مفتاح محذوف سابقاً
+  let key = (req.body.customKey || '').trim();
+  if (key) {
+    if (subscribers[key]) {
+      return res.status(409).json({ ok: false, error: 'هذا المفتاح مستخدم لمشترك آخر' });
+    }
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(key)) {
+      return res.status(400).json({ ok: false, error: 'مفتاح غير صالح — يسمح بـ A-Z a-z 0-9 _ - فقط (6-64 حرف)' });
+    }
+  } else {
+    key = generateKey();
+  }
   const now = new Date(); const expires = new Date(now); expires.setDate(expires.getDate() + (parseInt(req.body.days) || 30));
   subscribers[key] = { email: req.body.email||'', name: req.body.name||'', paymentId: 'manual', createdAt: now.toISOString(), expiresAt: expires.toISOString(), active: true };
   saveSubscribers(subscribers);
-  res.json({ ok: true, key, expiresAt: expires.toISOString() });
+  res.json({ ok: true, key, expiresAt: expires.toISOString(), customized: !!req.body.customKey });
 });
 
 // ── Resolve key → username (for overlay auto-connect) ───
@@ -435,6 +461,26 @@ app.post('/api/logout', (req, res) => {
   ]);
   res.json({ ok: true });
 });
+
+// ── 🔒 حماية API الفعاليات: يتحقق أن المتصل يملك الـ username المطلوب ───
+// المالك يقدر يصل لأي حساب، والمشترك يقدر يصل فقط للحساب المسجّل عنده
+function requireGameAccess(req, res, next) {
+  const key = req.cookies.bthlab_key || req.query.key || '';
+  const pw = req.cookies.bthlab_pw || req.query.pw || '';
+  const reqUsername = (req.body?.username || req.query?.username || req.params?.username || '').toLowerCase().replace('@','').trim();
+  if (!reqUsername) return res.status(400).json({ ok: false, error: 'username مطلوب' });
+  // المالك يمر دائماً
+  if (pw === OWNER_PASSWORD) return next();
+  // المشترك يمر فقط إذا الـ username يطابق المسجّل عنده
+  const sub = subscribers[key];
+  if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+    return res.status(401).json({ ok: false, error: 'غير مصرح — سجّل الدخول' });
+  }
+  if (sub.tiktokUsername !== reqUsername) {
+    return res.status(403).json({ ok: false, error: 'غير مصرح بالوصول لهذا الحساب' });
+  }
+  next();
+}
 
 // Redirect root to landing page
 // index.html served automatically by express.static
@@ -738,15 +784,15 @@ function getWheel(key) {
   return wheels[key];
 }
 
-app.post('/api/wheel/config', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (req.body.keyword) w.keyword = req.body.keyword; if (req.body.title) w.title = req.body.title; if (req.body.colors) w.colors = req.body.colors; if (req.body.textColor) w.textColor = req.body.textColor; if (req.body.pointerColor) w.pointerColor = req.body.pointerColor; if (req.body.spinDuration) w.spinDuration = req.body.spinDuration; io.to(`room:${key}`).emit('wheel:config', { keyword: w.keyword, title: w.title, colors: w.colors, textColor: w.textColor, pointerColor: w.pointerColor, spinDuration: w.spinDuration }); res.json({ ok: true }); });
-app.post('/api/wheel/clear', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.clear(); w.removedIds.clear(); io.to(`room:${key}`).emit('wheel:update', { entries: [], count: 0, fullSync: true }); res.json({ ok: true }); });
-app.post('/api/wheel/add', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key || !req.body.name) return res.json({ ok: false }); const w = getWheel(key); const userId = 'manual_' + Date.now(); const entry = { userId, name: req.body.name.trim(), avatar: null }; w.entries.set(userId, entry); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: entry }); res.json({ ok: true, entry }); });
-app.post('/api/wheel/start-registration', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.accepting = true; const dur = parseInt(req.body.duration) || 0; const endTime = dur > 0 ? Date.now() + dur * 1000 : 0; w.regEndTime = endTime; if (w.regTimer) clearTimeout(w.regTimer); if (dur > 0) { w.regTimer = setTimeout(() => { w.accepting = false; w.regEndTime = 0; io.to(`room:${key}`).emit('wheel:registration', { accepting: false, endTime: 0 }); }, dur * 1000); } io.to(`room:${key}`).emit('wheel:registration', { accepting: true, endTime, keyword: w.keyword || 'اشتراك', count: w.entries.size }); res.json({ ok: true }); });
-app.post('/api/wheel/stop-registration', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.accepting = false; w.regEndTime = 0; if (w.regTimer) { clearTimeout(w.regTimer); w.regTimer = null; } io.to(`room:${key}`).emit('wheel:registration', { accepting: false, endTime: 0 }); res.json({ ok: true }); });
-app.post('/api/wheel/remove-winner', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
-app.post('/api/wheel/remove', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
-app.post('/api/wheel/spin', (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (w.entries.size < 2) return res.json({ ok: false, message: 'يحتاج مشتركين أكثر' }); const entries = Array.from(w.entries.values()); const winnerIndex = Math.floor(Math.random() * entries.length); const winner = entries[winnerIndex]; const durationMs = (req.body.duration || 5) * 1000; io.to(`room:${key}`).emit('wheel:spin', { winner, winnerIndex, duration: durationMs, speed: req.body.speed || 'normal', entries }); res.json({ ok: true, winner }); });
-app.get('/api/wheel/:username', (req, res) => { const key = req.params.username.toLowerCase().replace('@','').trim(); const w = getWheel(key); res.json({ keyword: w.keyword, entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, regEndTime: w.regEndTime || 0 }); });
+app.post('/api/wheel/config', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (req.body.keyword) w.keyword = req.body.keyword; if (req.body.title) w.title = req.body.title; if (req.body.colors) w.colors = req.body.colors; if (req.body.textColor) w.textColor = req.body.textColor; if (req.body.pointerColor) w.pointerColor = req.body.pointerColor; if (req.body.spinDuration) w.spinDuration = req.body.spinDuration; io.to(`room:${key}`).emit('wheel:config', { keyword: w.keyword, title: w.title, colors: w.colors, textColor: w.textColor, pointerColor: w.pointerColor, spinDuration: w.spinDuration }); res.json({ ok: true }); });
+app.post('/api/wheel/clear', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.clear(); w.removedIds.clear(); io.to(`room:${key}`).emit('wheel:update', { entries: [], count: 0, fullSync: true }); res.json({ ok: true }); });
+app.post('/api/wheel/add', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key || !req.body.name) return res.json({ ok: false }); const w = getWheel(key); const userId = 'manual_' + Date.now(); const entry = { userId, name: req.body.name.trim(), avatar: null }; w.entries.set(userId, entry); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, newEntry: entry }); res.json({ ok: true, entry }); });
+app.post('/api/wheel/start-registration', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.accepting = true; const dur = parseInt(req.body.duration) || 0; const endTime = dur > 0 ? Date.now() + dur * 1000 : 0; w.regEndTime = endTime; if (w.regTimer) clearTimeout(w.regTimer); if (dur > 0) { w.regTimer = setTimeout(() => { w.accepting = false; w.regEndTime = 0; io.to(`room:${key}`).emit('wheel:registration', { accepting: false, endTime: 0 }); }, dur * 1000); } io.to(`room:${key}`).emit('wheel:registration', { accepting: true, endTime, keyword: w.keyword || 'اشتراك', count: w.entries.size }); res.json({ ok: true }); });
+app.post('/api/wheel/stop-registration', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.accepting = false; w.regEndTime = 0; if (w.regTimer) { clearTimeout(w.regTimer); w.regTimer = null; } io.to(`room:${key}`).emit('wheel:registration', { accepting: false, endTime: 0 }); res.json({ ok: true }); });
+app.post('/api/wheel/remove-winner', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
+app.post('/api/wheel/remove', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
+app.post('/api/wheel/spin', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (w.entries.size < 2) return res.json({ ok: false, message: 'يحتاج مشتركين أكثر' }); const entries = Array.from(w.entries.values()); const winnerIndex = Math.floor(Math.random() * entries.length); const winner = entries[winnerIndex]; const durationMs = (req.body.duration || 5) * 1000; io.to(`room:${key}`).emit('wheel:spin', { winner, winnerIndex, duration: durationMs, speed: req.body.speed || 'normal', entries }); res.json({ ok: true, winner }); });
+app.get('/api/wheel/:username', requireGameAccess, (req, res) => { const key = req.params.username.toLowerCase().replace('@','').trim(); const w = getWheel(key); res.json({ keyword: w.keyword, entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, regEndTime: w.regEndTime || 0 }); });
 
 // ══════════════════════════════════════════════════════════
 // ── Password Game (كلمة السر) ────────────────────────────
@@ -757,7 +803,7 @@ function getPassword(key) {
   return passwords[key];
 }
 
-app.post('/api/password/start', (req, res) => {
+app.post('/api/password/start', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const pw = getPassword(key);
@@ -772,7 +818,7 @@ app.post('/api/password/start', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/password/reveal', (req, res) => {
+app.post('/api/password/reveal', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const pw = getPassword(key);
@@ -786,7 +832,7 @@ app.post('/api/password/reveal', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/password/hint', (req, res) => {
+app.post('/api/password/hint', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key || !req.body.hint) return res.json({ ok: false });
   const pw = getPassword(key);
@@ -795,7 +841,7 @@ app.post('/api/password/hint', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/password/stop', (req, res) => {
+app.post('/api/password/stop', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const pw = getPassword(key);
@@ -805,7 +851,7 @@ app.post('/api/password/stop', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/password/:username', (req, res) => {
+app.get('/api/password/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const pw = getPassword(key);
   res.json({ length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: pw.active, winner: pw.winner, hints: pw.hints });
@@ -829,7 +875,7 @@ function getWordWarGame(key) {
   return wordWarGames[key];
 }
 
-app.post('/api/word-war/start', (req, res) => {
+app.post('/api/word-war/start', requireGameAccess, (req, res) => {
   const { username, category, validWords, duration, redKeyword, blueKeyword, resetTeams, redColor, blueColor } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   if (!key || !category) return res.json({ ok: false });
@@ -840,6 +886,7 @@ app.post('/api/word-war/start', (req, res) => {
   game.duration = Math.max(15, Math.min(120, parseInt(duration) || 60));
   game.active = true;
   game.endTime = Date.now() + game.duration * 1000;
+  game.registrationOpen = false; // 🔧 انتهت مرحلة التسجيل بمجرد بدء الجولة
   if (resetTeams) { game.redTeam.clear(); game.blueTeam.clear(); game.redScore = 0; game.blueScore = 0; }
   game.redWords.clear(); game.blueWords.clear();
   for (const [uid, p] of game.redTeam) p.words = [];
@@ -855,6 +902,7 @@ app.post('/api/word-war/start', (req, res) => {
   game.endTimer = setTimeout(() => {
     if (!game.active) return;
     game.active = false;
+    game.registrationOpen = false; // 🔧 انتهت الجولة كلياً
     const result = { category: game.category, redScore: game.redScore, blueScore: game.blueScore, winner: game.redScore > game.blueScore ? 'red' : game.blueScore > game.redScore ? 'blue' : 'tie', redWords: [...game.redWords], blueWords: [...game.blueWords] };
     game.roundHistory.push(result);
     broadcast(key, 'word-war:end', result);
@@ -862,7 +910,7 @@ app.post('/api/word-war/start', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/open-registration', (req, res) => {
+app.post('/api/word-war/open-registration', requireGameAccess, (req, res) => {
   const { username, redKeyword, blueKeyword } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
@@ -874,7 +922,7 @@ app.post('/api/word-war/open-registration', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/lock', (req, res) => {
+app.post('/api/word-war/lock', requireGameAccess, (req, res) => {
   const { username, locked } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
@@ -883,7 +931,7 @@ app.post('/api/word-war/lock', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/remove-player', (req, res) => {
+app.post('/api/word-war/remove-player', requireGameAccess, (req, res) => {
   const { username, team, playerName } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
@@ -894,7 +942,7 @@ app.post('/api/word-war/remove-player', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/add-player', (req, res) => {
+app.post('/api/word-war/add-player', requireGameAccess, (req, res) => {
   const { username, team, playerName } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   if (!key || !playerName) return res.json({ ok: false });
@@ -906,7 +954,7 @@ app.post('/api/word-war/add-player', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/clear-teams', (req, res) => {
+app.post('/api/word-war/clear-teams', requireGameAccess, (req, res) => {
   const { username } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
@@ -917,17 +965,18 @@ app.post('/api/word-war/clear-teams', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/stop', (req, res) => {
+app.post('/api/word-war/stop', requireGameAccess, (req, res) => {
   const { username } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
   if (game.endTimer) clearTimeout(game.endTimer);
   game.active = false;
+  game.registrationOpen = false; // 🔧 إيقاف يدوي = إنهاء كل مراحل اللعبة
   broadcast(key, 'word-war:stopped');
   res.json({ ok: true });
 });
 
-app.post('/api/word-war/clear', (req, res) => {
+app.post('/api/word-war/clear', requireGameAccess, (req, res) => {
   const { username } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
@@ -935,7 +984,7 @@ app.post('/api/word-war/clear', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/word-war/:username', (req, res) => {
+app.get('/api/word-war/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
   const redPlayers = Array.from(game.redTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
@@ -968,7 +1017,7 @@ app.post('/api/knockout/register', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/knockout/lock', (req, res) => {
+app.post('/api/knockout/lock', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ko = getKnockout(key);
@@ -978,7 +1027,7 @@ app.post('/api/knockout/lock', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/knockout/ask', (req, res) => {
+app.post('/api/knockout/ask', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ko = getKnockout(key);
@@ -1018,7 +1067,7 @@ function revealKnockout(key) {
   broadcast(key, 'knockout:reveal', { correct: q.correct, eliminated, aliveCount: alive.length, winner, round: ko.round });
 }
 
-app.post('/api/knockout/reveal', (req, res) => {
+app.post('/api/knockout/reveal', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   if (getKnockout(key).timer) clearTimeout(getKnockout(key).timer);
@@ -1026,7 +1075,7 @@ app.post('/api/knockout/reveal', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/knockout/stop', (req, res) => {
+app.post('/api/knockout/stop', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const ko = getKnockout(key);
@@ -1036,7 +1085,7 @@ app.post('/api/knockout/stop', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/knockout/:username', (req, res) => {
+app.get('/api/knockout/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const ko = getKnockout(key);
   const players = Array.from(ko.players.values());
@@ -1074,7 +1123,7 @@ function goToNextWord(key) {
   broadcast(key, 'guess:started', { length: game.word.length, hint: game.hint, revealed: game.revealed, letters: game.revealed.map(i => ({ i, c: game.word[i] })), winners: [] });
 }
 
-app.post('/api/guess/start', (req, res) => {
+app.post('/api/guess/start', requireGameAccess, (req, res) => {
   const { username, word, hint, wordPool } = req.body;
   const key = username?.toLowerCase().replace('@','').trim();
   if (!key || !word) return res.json({ ok: false });
@@ -1092,7 +1141,7 @@ app.post('/api/guess/start', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/guess/next', (req, res) => {
+app.post('/api/guess/next', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const game = getGuessGame(key);
@@ -1127,7 +1176,7 @@ app.post('/api/guess/scale', (req, res) => {
   res.json({ ok: true, scale: game.scale });
 });
 
-app.post('/api/guess/clear-stats', (req, res) => {
+app.post('/api/guess/clear-stats', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   getGuessGame(key).playerStats.clear();
@@ -1142,7 +1191,7 @@ app.post('/api/guess/clear-winners', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/guess/stop', (req, res) => {
+app.post('/api/guess/stop', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const game = getGuessGame(key);
@@ -1152,7 +1201,7 @@ app.post('/api/guess/stop', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/guess/:username', (req, res) => {
+app.get('/api/guess/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const game = getGuessGame(key);
   const allPlayers = Array.from(game.playerStats.entries()).map(([userId, s]) => ({ userId, name: s.name, avatar: s.avatar, totalWords: s.totalWords })).sort((a,b) => b.totalWords - a.totalWords);
@@ -1168,7 +1217,7 @@ function getQuiz(key) {
   return quizzes[key];
 }
 
-app.post('/api/quiz/start', (req, res) => {
+app.post('/api/quiz/start', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const q = getQuiz(key);
@@ -1194,7 +1243,7 @@ app.post('/api/quiz/start', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/quiz/stop', (req, res) => {
+app.post('/api/quiz/stop', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const q = getQuiz(key);
@@ -1207,7 +1256,7 @@ app.post('/api/quiz/stop', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/quiz/:username', (req, res) => {
+app.get('/api/quiz/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const q = getQuiz(key);
   res.json({ active: q.active, question: q.question, choices: q.choices, timer: q.timer, endTime: q.endTime || 0, totalAnswers: q.answers.size });
@@ -1222,7 +1271,7 @@ function getPoll(key) {
   return polls[key];
 }
 
-app.post('/api/poll/start', (req, res) => {
+app.post('/api/poll/start', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const p = getPoll(key);
@@ -1246,7 +1295,7 @@ app.post('/api/poll/start', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/poll/stop', (req, res) => {
+app.post('/api/poll/stop', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@','').trim();
   if (!key) return res.json({ ok: false });
   const p = getPoll(key);
@@ -1259,7 +1308,7 @@ app.post('/api/poll/stop', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/poll/:username', (req, res) => {
+app.get('/api/poll/:username', requireGameAccess, (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const p = getPoll(key);
   const results = {};
@@ -1294,7 +1343,7 @@ app.post('/api/connect', async (req, res) => {
   res.json({ ok: true, username: tiktokUser });
 });
 
-app.post('/api/disconnect', (req, res) => {
+app.post('/api/disconnect', requireGameAccess, (req, res) => {
   const key = req.body.username?.toLowerCase().replace('@', '').trim();
   const room = rooms[key]; if (!room) return res.json({ ok: false });
   if (room.retryTimer) clearTimeout(room.retryTimer);
@@ -1338,6 +1387,24 @@ io.on('connection', (socket) => {
   const ownerPw = ck.bthlab_pw || socket.handshake.auth?.pw || '';
   socket._isOwner = ownerPw && ownerPw === OWNER_PASSWORD;
   socket._sub = subKey && subscribers[subKey] && subscribers[subKey].active && new Date(subscribers[subKey].expiresAt) >= new Date() ? subscribers[subKey] : null;
+  socket._subKey = socket._sub ? subKey : null;
+
+  // 🟢 تسجيل المشترك المتصل + إعلام لوحة المالك
+  if (socket._subKey) {
+    if (!onlineSubs.has(socket._subKey)) onlineSubs.set(socket._subKey, new Set());
+    onlineSubs.get(socket._subKey).add(socket.id);
+    const tabs = onlineSubs.get(socket._subKey).size;
+    if (tabs === 1) io.to('owner').emit('subs:online', { key: socket._subKey, online: true, tabs });
+    else io.to('owner').emit('subs:online', { key: socket._subKey, online: true, tabs });
+  }
+  // 🟣 السماح للمالك بالاشتراك في تحديثات الحضور
+  if (socket._isOwner) {
+    socket.join('owner');
+    // ابعث له لقطة فورية بالحالة الحالية
+    const snapshot = {};
+    onlineSubs.forEach((set, key) => { if (set.size) snapshot[key] = set.size; });
+    socket.emit('subs:snapshot', snapshot);
+  }
 
   socket.on('join', ({ username }) => {
     const key = username?.toLowerCase().replace('@', '').trim();
@@ -1361,7 +1428,23 @@ io.on('connection', (socket) => {
     }
   });
   let key = null;
-  socket.on('disconnect', () => { if (key) socket.leave(`room:${key}`); });
+  socket.on('disconnect', () => {
+    if (key) socket.leave(`room:${key}`);
+    // 🟢 إزالة السوكت من قائمة المشتركين المتصلين
+    if (socket._subKey) {
+      const set = onlineSubs.get(socket._subKey);
+      if (set) {
+        set.delete(socket.id);
+        const tabs = set.size;
+        if (tabs === 0) {
+          onlineSubs.delete(socket._subKey);
+          io.to('owner').emit('subs:online', { key: socket._subKey, online: false, tabs: 0 });
+        } else {
+          io.to('owner').emit('subs:online', { key: socket._subKey, online: true, tabs });
+        }
+      }
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
