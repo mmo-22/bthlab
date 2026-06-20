@@ -16,9 +16,7 @@
 
   .main-box {
     position:relative;
-    background:rgba(10,12,22,.72);
-    backdrop-filter:blur(16px);
-    -webkit-backdrop-filter:blur(16px);
+    background: rgba(0,0,0,.92);
     border:1px solid rgba(245,158,11,.45);
     border-radius:24px;
     padding:calc(22px * var(--scale)) calc(28px * var(--scale));
@@ -199,10 +197,10 @@
     from { opacity:0; transform:translateY(20px); }
     to   { opacity:1; transform:translateY(0); }
   }
+50%{opacity:.35} }
 </style>
 </head>
 <body>
-
 <div class="main-box" id="main-box">
 <div class="game-title">💡 خمّن <span>الكلمة</span>!</div>
   <div class="letters-row" id="letters-row"></div>
@@ -237,10 +235,10 @@ const socket   = io({ auth: __auth, transports:['websocket','polling'], upgrade:
 
 // auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
 socket.on('connect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw }); } catch(e){}
 });
 socket.io.on('reconnect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
+  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw }); } catch(e){}
 });
 
 let nwTimer    = null;
@@ -262,8 +260,8 @@ socket.on('guess:scale', ({ scale: s }) => {
 
 function joinRoom() {
   if (username) {
-    socket.emit('join', { username });
-    fetch(`/api/guess/${username}`).then(r => r.json()).then(data => {
+    socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });
+    fetch(_api(`/api/guess/${username}`)).then(r => r.json()).then(data => {
       winners = data.winners || [];
       currentHint = data.hint || '';
       if (typeof data.scale === 'number') { scale = data.scale; applyScale(); }

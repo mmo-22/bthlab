@@ -10,7 +10,7 @@
 body.mobile{transform:scale(0.55);transform-origin:center center}
 html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',sans-serif;overflow:hidden;display:flex;align-items:center;justify-content:center}
 :root{--scale:1}
-.main-box{position:relative;background:rgba(10,12,22,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:calc(20px * var(--scale)) calc(24px * var(--scale));width:calc(700px * var(--scale));height:calc(460px * var(--scale));opacity:0;pointer-events:none;transition:opacity .15s;overflow:hidden;box-shadow:0 26px 60px -22px rgba(0,0,0,.8)}
+.main-box{position:relative;background:rgba(0,0,0,.92);border:2px solid rgba(255,255,255,.12);border-radius:22px;padding:calc(20px * var(--scale)) calc(24px * var(--scale));width:calc(700px * var(--scale));height:calc(460px * var(--scale));opacity:0;pointer-events:none;transition:opacity .15s;overflow:hidden}
 .main-box.show{opacity:1}
 
 .game-title{font-size:calc(18px * var(--scale));color:rgba(255,255,255,.5);text-align:center;margin-bottom:calc(6px * var(--scale))}
@@ -37,12 +37,14 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 .words-col{flex:1;border-radius:12px;padding:calc(8px * var(--scale));height:100%;overflow:hidden}
 .words-col.red{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)}
 .words-col.blue{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15)}
+.words-col.reg-mode{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px;padding:calc(6px * var(--scale))}
 .word-chip{display:inline-flex;align-items:center;gap:calc(4px * var(--scale));padding:calc(3px * var(--scale)) calc(10px * var(--scale)) calc(3px * var(--scale)) calc(3px * var(--scale));margin:calc(2px * var(--scale));border-radius:20px;font-size:calc(12px * var(--scale));font-weight:700;animation:chipPop .3s cubic-bezier(0.34,1.56,0.64,1)}
 .word-chip .avatar{width:calc(20px * var(--scale));height:calc(20px * var(--scale));border-radius:50%;object-fit:cover;flex-shrink:0}
 .words-col.red .word-chip{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25)}
 .words-col.blue .word-chip{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.25)}
 @keyframes chipPop{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes joinPop{0%{transform:translateX(-50%) translateY(-20px) scale(.8);opacity:0}100%{transform:translateX(-50%) translateY(0) scale(1);opacity:1}}
+@keyframes regPop{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
 
 .timer-row{display:flex;align-items:center;gap:calc(12px * var(--scale));padding:0 calc(4px * var(--scale))}
 .timer-bar{flex:1;height:calc(8px * var(--scale));background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden}
@@ -51,11 +53,11 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 .timer-fill.danger{background:#ff0050}
 .timer-num{font-size:calc(22px * var(--scale));font-weight:900;color:#fff;font-variant-numeric:tabular-nums;min-width:calc(40px * var(--scale));text-align:center}
 
-.result-banner{display:none;text-align:center;padding:calc(24px * var(--scale));border-radius:14px;position:absolute;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center}
+.result-banner{display:none;text-align:center;padding:calc(24px * var(--scale));border-radius:14px;position:absolute;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .result-banner.show{display:flex;animation:chipPop .5s cubic-bezier(0.34,1.56,0.64,1)}
-.result-banner.red-win{background:rgba(239,68,68,.15);border:2px solid rgba(239,68,68,.4)}
-.result-banner.blue-win{background:rgba(59,130,246,.15);border:2px solid rgba(59,130,246,.4)}
-.result-banner.tie{background:rgba(251,191,36,.15);border:2px solid rgba(251,191,36,.4)}
+.result-banner.red-win{background:rgba(239,68,68,.25);border:2px solid rgba(239,68,68,.5)}
+.result-banner.blue-win{background:rgba(59,130,246,.25);border:2px solid rgba(59,130,246,.5)}
+.result-banner.tie{background:rgba(251,191,36,.25);border:2px solid rgba(251,191,36,.5)}
 .result-text{font-size:calc(32px * var(--scale));font-weight:900;color:#fff}
 .result-sub{font-size:calc(16px * var(--scale));color:rgba(255,255,255,.6);margin-top:calc(8px * var(--scale))}
 
@@ -69,9 +71,21 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </head>
 <body>
 <div class="main-box" id="box">
-<div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
+  <div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
   <div class="category-bar" id="category">—</div>
-  <div id="join-keywords" style="display:none;text-align:center;font-size:calc(13px * var(--scale));margin-bottom:calc(10px * var(--scale));color:rgba(255,255,255,.6);font-weight:500"></div>
+  <div id="join-keywords" style="display:none;text-align:center;font-size:calc(13px * var(--scale));margin-bottom:calc(6px * var(--scale));color:rgba(255,255,255,.6);font-weight:500"></div>
+  <div id="reg-avatars" style="display:none;margin-bottom:calc(8px * var(--scale))">
+    <div style="display:flex;gap:calc(6px * var(--scale));align-items:center">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:calc(10px * var(--scale));color:#ef4444;font-weight:700">🔴 الأحمر</div>
+        <div id="red-reg-avatars" style="display:flex;flex-wrap:nowrap;gap:3px;justify-content:center;overflow:hidden;max-height:28px"></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:calc(10px * var(--scale));color:#3b82f6;font-weight:700">🔵 الأزرق</div>
+        <div id="blue-reg-avatars" style="display:flex;flex-wrap:nowrap;gap:3px;justify-content:center;overflow:hidden;max-height:28px"></div>
+      </div>
+    </div>
+  </div>
   <div class="scoreboard">
     <div class="team-score red">
       <div class="team-label">🔴 الفريق الأحمر</div>
@@ -91,7 +105,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
     <div class="words-col red" id="red-words"></div>
     <div class="words-col blue" id="blue-words"></div>
   </div>
-  <div class="timer-row" id="timer-row">
+  <div class="timer-row" id="timer-row" style="display:none">
     <div class="timer-num" id="timer-num">60</div>
     <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
   </div>
@@ -106,17 +120,11 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 const params = new URLSearchParams(location.search);
 const cfg = { username: params.get('username') || '' };
-const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
-const socket = io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
-
-// auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
-socket.on('connect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
-});
-socket.io.on('reconnect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
-});
-
+const __auth=(function(){var p=new URLSearchParams(location.search);return{key:p.get('key')||'',pw:p.get('pw')||''};})();
+const socket = io({ auth:__auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
+// auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
+socket.on('connect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
+socket.io.on('reconnect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
 let timerInt = null, endTime = 0, totalDuration = 60;
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -138,14 +146,31 @@ function applyColors(red, blue) {
 function joinRoom() {
   if (!cfg.username) return;
   socket.emit('join', { username: cfg.username });
-  fetch(`/api/word-war/${cfg.username}`).then(r=>r.json()).then(d => {
+  fetch(_api(`/api/word-war/${cfg.username}`)).then(r=>r.json()).then(d => {
     if (d.active) {
       document.getElementById('category').textContent = d.category;
       updateScores(d.redScore, d.blueScore);
       renderWords('red', d.redWords || []);
       renderWords('blue', d.blueWords || []);
       const remMs = Math.max(0, d.endTime - Date.now());
+      document.getElementById('timer-row').style.display = 'flex';
       startTimer(Math.ceil(remMs/1000), d.duration);
+      document.getElementById('box').classList.add('show');
+    }
+    // Show during registration too
+    if (d.registrationOpen) {
+      const kw = document.getElementById('join-keywords');
+      if (kw) {
+        kw.innerHTML = '📝 سجل الآن! — <span style="color:#fca5a5">🔴 اكتب "' + esc(d.redKeyword||'أحمر') + '"</span> أو <span style="color:#93c5fd">🔵 اكتب "' + esc(d.blueKeyword||'أزرق') + '"</span>';
+        kw.style.display = 'block';
+        kw.style.color = '#1dba72';
+        kw.style.fontSize = 'calc(15px * var(--scale))';
+      }
+      document.getElementById('category').textContent = '📝 مرحلة التسجيل';
+      document.getElementById('timer-row').style.display = 'none';
+      var ra = document.getElementById('reg-avatars');
+      if (ra) ra.style.display = 'block';
+      updateScores(d.redScore || 0, d.blueScore || 0);
       document.getElementById('box').classList.add('show');
     }
   });
@@ -156,6 +181,11 @@ joinRoom();
 socket.on('word-war:start', ({ category, duration, redKeyword, blueKeyword, redScore, blueScore }) => {
   playerWordCounts = {};
   document.getElementById('category').textContent = category;
+  // Hide registration elements
+  var ra = document.getElementById('reg-avatars');
+  if (ra) ra.style.display = 'none';
+  document.getElementById('red-words').classList.remove('reg-mode');
+  document.getElementById('blue-words').classList.remove('reg-mode');
   document.getElementById('red-score').textContent = redScore || '0';
   document.getElementById('blue-score').textContent = blueScore || '0';
   document.getElementById('red-words').innerHTML = '';
@@ -169,14 +199,16 @@ socket.on('word-war:start', ({ category, duration, redKeyword, blueKeyword, redS
     kw.style.display = 'block';
   }
   totalDuration = duration;
+  document.getElementById('timer-row').style.display = 'flex';
   startTimer(duration, duration);
   document.getElementById('box').classList.add('show');
 });
 
-var playerWordCounts = {}; // track words per player per round
+var playerWordCounts = {};
 
-socket.on('word-war:word', ({ team, word, player, avatar, redScore, blueScore }) => {
+socket.on('word-war:word', ({ team, word, player, avatar, redScore, blueScore, totalWords }) => {
   updateScores(redScore, blueScore);
+  playerWordCounts[player] = totalWords || ((playerWordCounts[player] || 0) + 1);
   const col = document.getElementById(team + '-words');
   const chip = document.createElement('span');
   chip.className = 'word-chip';
@@ -186,14 +218,35 @@ socket.on('word-war:word', ({ team, word, player, avatar, redScore, blueScore })
     chip.innerHTML = esc(word);
   }
   col.prepend(chip);
-  while (col.children.length > 8) col.removeChild(col.lastChild);
+  while (col.children.length > 5) col.removeChild(col.lastChild);
 });
 
-socket.on('word-war:join', ({ team, player, redCount, blueCount }) => {
+var regVisibleCount = 10;
+
+socket.on('word-war:join', ({ team, player, avatar, redCount, blueCount }) => {
   document.querySelector('.team-score.red .team-label').textContent = '🔴 الأحمر (' + redCount + ')';
   document.querySelector('.team-score.blue .team-label').textContent = '🔵 الأزرق (' + blueCount + ')';
-  // Show registration confirmation
   showJoinConfirm(team, player);
+  // Add avatar to words column during registration
+  var col = document.getElementById(team + '-words');
+  if (col && col.classList.contains('reg-mode')) {
+    var borderColor = team === 'red' ? '#ef4444' : '#3b82f6';
+    var div = document.createElement('div');
+    div.style.cssText = 'width:28px;height:28px;border-radius:50%;border:2px solid '+borderColor+';overflow:hidden;flex-shrink:0;animation:regPop .3s ease;display:inline-block;margin:2px';
+    if (avatar) {
+      div.innerHTML = '<img src="'+avatar+'" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent=\'?\'">';
+    } else {
+      div.style.cssText += ';display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.1);font-size:10px;color:rgba(255,255,255,.4)';
+      div.textContent = '?';
+    }
+    col.appendChild(div);
+    while (col.children.length > regVisibleCount) col.removeChild(col.firstChild);
+  }
+});
+
+// Listen for visible count changes
+socket.on('word-war:reg-visible', function(d) {
+  regVisibleCount = d.count || 10;
 });
 
 function showJoinConfirm(team, name) {
@@ -211,14 +264,23 @@ function showJoinConfirm(team, name) {
 
 socket.on('word-war:registration', ({ open, redKeyword, blueKeyword }) => {
   const kw = document.getElementById('join-keywords');
+  const ra = document.getElementById('reg-avatars');
   if (open && kw) {
+    stopTimer();
+    document.getElementById('timer-row').style.display = 'none';
+    document.getElementById('result-banner').classList.remove('show','red-win','blue-win','tie');
     kw.innerHTML = '📝 سجل الآن! — <span style="color:#fca5a5">🔴 اكتب "' + esc(redKeyword) + '"</span> أو <span style="color:#93c5fd">🔵 اكتب "' + esc(blueKeyword) + '"</span>';
     kw.style.display = 'block';
     kw.style.color = '#1dba72';
     kw.style.fontSize = 'calc(15px * var(--scale))';
     document.getElementById('category').textContent = '📝 مرحلة التسجيل';
-    // Don't reset scores - keep them as they are
     document.getElementById('box').classList.add('show');
+    // Use words area for registration avatars
+    document.getElementById('red-words').innerHTML = '';
+    document.getElementById('blue-words').innerHTML = '';
+    document.getElementById('red-words').classList.add('reg-mode');
+    document.getElementById('blue-words').classList.add('reg-mode');
+    if (ra) ra.style.display = 'none';
   }
 });
 
@@ -228,6 +290,26 @@ socket.on('word-war:lock', ({ locked }) => {
     if (locked) { kw.innerHTML = '🔒 التسجيل مقفل'; kw.style.color = '#ef4444'; }
     else { kw.style.color = 'rgba(255,255,255,.6)'; }
   }
+  stopTimer();
+  document.getElementById('timer-row').style.display = 'none';
+});
+
+socket.on('word-war:teams-cleared', () => {
+  stopTimer();
+  document.getElementById('timer-row').style.display = 'none';
+  document.getElementById('red-score').textContent = '0';
+  document.getElementById('blue-score').textContent = '0';
+  updateScores(0, 0);
+  document.getElementById('red-words').innerHTML = '';
+  document.getElementById('blue-words').innerHTML = '';
+  document.getElementById('red-words').classList.remove('reg-mode');
+  document.getElementById('blue-words').classList.remove('reg-mode');
+  document.getElementById('result-banner').classList.remove('show','red-win','blue-win','tie');
+  document.querySelector('.team-score.red .team-label').textContent = '🔴 الأحمر (0)';
+  document.querySelector('.team-score.blue .team-label').textContent = '🔵 الأزرق (0)';
+  document.getElementById('red-reg-avatars').innerHTML = '';
+  document.getElementById('blue-reg-avatars').innerHTML = '';
+  playerWordCounts = {};
 });
 
 socket.on('word-war:end', (result) => {

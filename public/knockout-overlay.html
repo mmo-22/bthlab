@@ -7,11 +7,10 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body.mobile{transform:scale(0.55);transform-origin:center center}
 html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',sans-serif;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.main{position:relative;background:rgba(10,12,22,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(239,68,68,.45);border-radius:24px;padding:24px 28px;min-width:520px;max-width:680px;opacity:0;transition:opacity .15s;overflow:hidden;box-shadow:0 26px 60px -22px rgba(0,0,0,.8), 0 0 38px -14px rgba(239,68,68,.4)}
+.main{position:relative;background:rgba(0,0,0,.92);border:2px solid rgba(239,68,68,.4);border-radius:22px;padding:24px 28px;min-width:520px;max-width:680px;opacity:0;transition:opacity .15s;overflow:hidden}
 .main.show{opacity:1}
-.main::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#ef4444,#f59e0b,#ef4444)}
+.main::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ef4444,#ffd700,#ef4444)}
 
 .title{font-size:18px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:10px}
 .title span{color:#ef4444;font-weight:900}
@@ -40,7 +39,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 
 .players-alive{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:10px}
 .progress-wrap{width:90%;height:10px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,#1dba72,#0891b2);border-radius:99px;transition:width .5s ease}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1dba72,#25f4ee);border-radius:99px;transition:width .5s ease}
 .progress-fill.low{background:linear-gradient(90deg,#f59e0b,#ef4444)}
 .progress-text{font-size:12px;color:rgba(255,255,255,.4);font-weight:700}
 
@@ -70,7 +69,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </head>
 <body>
 <div class="main" id="box">
-<div class="title">🏆 <span>بطولة خروج</span></div>
+  <div class="title">🏆 <span>بطولة خروج</span></div>
   <div class="phase-label" id="phase-label"></div>
   <div class="stats-row" id="stats-row" style="display:none">
     <div class="stat"><div class="stat-num" id="alive-num">0</div><div class="stat-label">باقي</div></div>
@@ -96,19 +95,13 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
   <div class="confetti-layer" id="confetti-layer"></div>
 </div>
 <script>
-if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
-var socket=io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
+const __auth=(function(){var p=new URLSearchParams(location.search);return{key:p.get('key')||'',pw:p.get('pw')||''};})();
+const socket = io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});if(username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });
+// auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
+socket.on('connect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
+socket.io.on('reconnect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
 
-// auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
-socket.on('connect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
-});
-socket.io.on('reconnect', function() {
-  try { if (typeof username !== 'undefined' && username) socket.emit('join', { username: username }); } catch(e){}
-});
-if(username)socket.emit('join',{username});
 var timerInt=null,COLORS=['#ef4444','#fbbf24','#1dba72','#3b82f6','#a855f7','#ec4899'];
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
