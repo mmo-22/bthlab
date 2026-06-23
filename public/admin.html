@@ -345,10 +345,11 @@ if (userKey && mode !== 'owner') {
   });
 }
 
-socket.on('room:status', ({ username, status, viewers }) => {
+socket.on('room:status', ({ username, status, viewers, message }) => {
   if (status === 'removed') { delete roomsData[username]; if (myUsername === username) { myUsername = ''; updateConnectUI(); } render(); return; }
   if (!roomsData[username]) roomsData[username]={ username, stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
   roomsData[username].status = status;
+  roomsData[username].errorMsg = (status === 'error' || status === 'offline') ? (message || '') : '';
   if (viewers) roomsData[username].stats.viewers = viewers;
   render();
   ensureStatsChannel();
@@ -439,16 +440,23 @@ function render() {
   if (!keys.length) { roomsEl.innerHTML='<div class="empty">لا يوجد اتصال — أضف يوزرنيم تيك توك حقك فوق</div>'; return; }
   roomsEl.innerHTML = keys.map(key => {
     const r = roomsData[key], status = r.status||'idle', stats = r.stats||{};
-    // 🔒 ما نحط المفتاح/الباسورد في الـ href — الصفحات تقرأ من localStorage (محفوظ في بداية اللوحة)
+    const hasError = (status === 'error' || status === 'offline') && r.errorMsg;
     const gamesHtml = GAMES.map(g =>
       '<a class="bx game" style="--c:' + g.color + '" href="' + location.origin + '/' + g.page + '?username=' + r.username + '" target="_blank">' +
       '<span class="gi">' + g.icon + '</span><div><div class="gn">' + g.name + '</div><div class="gs">فتح لوحة التحكم</div></div><span class="go">←</span></a>'
     ).join('');
+    // ⚠️ لافتة الخطأ + زر إعادة المحاولة
+    const errorBanner = hasError ?
+      '<div class="bx" style="grid-column:1/-1;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);border-radius:14px;padding:14px;color:#fecaca">' +
+        '<div style="font-size:14px;font-weight:800;margin-bottom:8px">' + escapeHtml(r.errorMsg) + '</div>' +
+        '<button onclick="retryConnect(\'' + r.username + '\')" style="background:#ef4444;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:800;cursor:pointer;font-family:inherit">🔄 إعادة الاتصال</button>' +
+      '</div>' : '';
     return '<div class="bento">' +
       '<div class="bx hero ' + status + '">' +
         '<div class="hero-top"><span class="status-dot ' + status + '"></span><div><div class="room-name">@' + r.username + '</div><div class="room-meta">' + statusLabel(status) + '</div></div></div>' +
         '<button class="top-btn remove" onclick="removeRoom(\'' + r.username + '\')">✕ قطع الاتصال</button>' +
       '</div>' +
+      errorBanner +
       '<div class="bx stat" style="--c:#06b6d4"><div class="v" id="stat-viewers">👁️ ' + (stats.viewers||0).toLocaleString() + '</div><div class="l">المشاهدون</div></div>' +
       '<div class="bx stat" style="--c:#ec4899"><div class="v" id="stat-likes">❤️ ' + (stats.likes||0).toLocaleString() + '</div><div class="l">الإعجابات</div></div>' +
       '<div class="bx stat" style="--c:#f59e0b"><div class="v" id="stat-diamonds">💎 ' + (stats.diamonds||0).toLocaleString() + '</div><div class="l">الدياموند</div></div>' +
@@ -459,6 +467,22 @@ function render() {
       gamesHtml +
     '</div>';
   }).join('');
+}
+
+function escapeHtml(s) { return String(s||'').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// زر إعادة المحاولة - يستدعي /api/connect بدون التحقق من Rate Limit
+async function retryConnect(username) {
+  const body = { username };
+  if (userKey) body.key = userKey;
+  const res = await apiFetch('/api/connect', { method:'POST', body: JSON.stringify(body) });
+  const data = await res.json();
+  if (data.ok) {
+    showToast('جاري إعادة الاتصال بـ @' + username + '...');
+    if (roomsData[username]) { roomsData[username].status = 'connecting'; roomsData[username].errorMsg = ''; render(); }
+  } else if (data.error) {
+    showToast(data.error);
+  }
 }
 
 document.getElementById('username-input').addEventListener('keydown', e => { if (e.key === 'Enter') addRoom(); });

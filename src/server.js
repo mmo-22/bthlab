@@ -52,7 +52,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.8.0';
+const VERSION = '2.8.2';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -592,20 +592,31 @@ async function connectRoom(username, sessionid = null) {
     const state = await tiktok.connect();
     room.status = 'connected'; room.retryCount = 0;
     room.stats.viewers = state.viewerCount || 0;
-    console.log(`[TikTok] Connected @${key}`);
+    console.log(`[TikTok] ✅ Connected @${key}`);
     io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers: state.viewerCount });
     broadcast(key, 'stats', room.stats);
   } catch(err) {
-    const msg = err.message || '';
-    let userMsg = 'خطأ في الاتصال';
-    if (msg.includes('sign request') || msg.includes('404')) userMsg = 'سيرفر التوقيع غير متاح — جاري إعادة المحاولة تلقائياً';
-    else if (msg.includes('not found') || msg.includes('user_not_found')) userMsg = 'الحساب غير موجود أو مو في بث مباشر';
-    else if (msg.includes('LIVE has ended') || msg.includes('is not live')) userMsg = 'الحساب مو في بث مباشر حالياً';
-    else if (msg.includes('403')) userMsg = 'تيك توك رفض الاتصال — جاري إعادة المحاولة';
-    console.log(`[TikTok] Failed @${key}: ${msg}`);
+    const msg = err.message || String(err) || 'unknown';
+    let userMsg = '';
+    // تحليل دقيق لسبب الفشل
+    if (/not.*live|stream.*end|not.*online|userOffline|room.*not.*found/i.test(msg)) {
+      userMsg = '⚠️ الحساب مش مباشر حالياً. ابدأ البث في تيك توك ثم اضغط "إعادة الاتصال"';
+    } else if (/user.*not.*found|account.*not.*found|404/i.test(msg)) {
+      userMsg = '❌ اليوزرنيم غير موجود في تيك توك — تأكد من الإملاء';
+    } else if (/sign.*request|signing|signature|401|403/i.test(msg)) {
+      userMsg = '🔑 مشكلة في مفتاح tik.tools — تواصل مع الدعم';
+    } else if (/rate.*limit|429|too.*many/i.test(msg)) {
+      userMsg = '⏱️ تجاوز معدل الطلبات — انتظر دقيقة وأعد المحاولة';
+    } else if (/ban|forbidden|blocked/i.test(msg)) {
+      userMsg = '🚫 تيك توك حظر هذا الـ IP مؤقتاً — تواصل مع الدعم';
+    } else {
+      userMsg = `❌ فشل الاتصال: ${msg.slice(0, 100)}`;
+    }
+    console.log(`[TikTok] ❌ Failed @${key}: ${msg}`);
+    console.log(`[TikTok]    سبب مبسط: ${userMsg}`);
     room.status = 'error';
     io.to(`room:${key}`).emit('room:status', { username: key, status: 'error', message: userMsg, technical: msg });
-    scheduleRetry(key, 15000, msg);
+    scheduleRetry(key, 0, msg);
     return;
   }
 
@@ -818,11 +829,11 @@ async function checkIfLive(username) {
   }
 }
 
-// Rate limiting صارم لكل user + للسيرفر كله
+// Rate limiting لكل user + للسيرفر كله (يمنع الضغط المتكرر السريع)
 const lastConnectAttempt = new Map(); // username → timestamp
-const PER_USER_COOLDOWN = 30 * 1000;   // 30 ثانية بين المحاولات لنفس المستخدم
+const PER_USER_COOLDOWN = 10 * 1000;    // 10 ثوانٍ بين المحاولات لنفس المستخدم
 let lastGlobalAttempt = 0;
-const GLOBAL_COOLDOWN = 3 * 1000;       // 3 ثوانٍ بين أي محاولات (كل السيرفر)
+const GLOBAL_COOLDOWN = 1500;            // 1.5 ثانية بين أي محاولات (كل السيرفر)
 
 function checkRateLimit(username) {
   const now = Date.now();
@@ -1409,13 +1420,21 @@ app.post('/api/connect', async (req, res) => {
   if (!username) return res.json({ ok: false });
   const tiktokUser = username.toLowerCase().replace('@', '').trim();
 
+  // 🔑 فحص أساسي: مفتاح TIKTOOL_API_KEY موجود؟
+  if (!TIKTOK_API_KEY) {
+    console.error('❌ [Connect] رفض: مفتاح TIKTOOL_API_KEY غير محدد في env vars');
+    return res.json({
+      ok: false,
+      error: '⚠️ مفتاح tik.tools غير مهيأ. تواصل مع الدعم.'
+    });
+  }
+
   // If subscriber key provided, enforce assigned username
   if (subKey) {
     const sub = subscribers[subKey];
     if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
       return res.json({ ok: false, error: 'مفتاح غير صالح' });
     }
-    // Subscriber can ONLY connect to their assigned username
     if (sub.tiktokUsername && sub.tiktokUsername !== tiktokUser) {
       return res.json({ ok: false, error: 'لا يمكنك تغيير اليوزرنيم. تواصل مع الدعم لتغييره.' });
     }
@@ -1425,23 +1444,11 @@ app.post('/api/connect', async (req, res) => {
     }
   }
 
-  // 🛡️ طبقة 1: Rate limiting صارم — يمنع الضغط المتكرر على زر الاتصال
+  // 🛡️ Rate limiting صارم
   const rl = checkRateLimit(tiktokUser);
   if (!rl.ok) {
     return res.json({ ok: false, error: rl.error });
   }
-
-  // 🛡️ طبقة 2: فحص حالة البث قبل أي محاولة اتصال — يمنع المحاولات الفاشلة
-  console.log(`[Connect] فحص حالة البث لـ @${tiktokUser}...`);
-  const liveCheck = await checkIfLive(tiktokUser);
-  if (!liveCheck.isLive) {
-    console.log(`[Connect] @${tiktokUser} مش مباشر — رفض الاتصال`);
-    return res.json({
-      ok: false,
-      error: liveCheck.error || '⚠️ الحساب مش مباشر حالياً. ابدأ البث في تيك توك أولاً ثم اضغط "اتصال"'
-    });
-  }
-  console.log(`[Connect] ✅ @${tiktokUser} مباشر — بدء الاتصال`);
 
   // 🔄 ضغطة "اتصال" يدوية = تصفير العداد + إلغاء أي timer قديم
   const existing = rooms[tiktokUser];
@@ -1449,6 +1456,7 @@ app.post('/api/connect', async (req, res) => {
     if (existing.retryTimer) { clearTimeout(existing.retryTimer); existing.retryTimer = null; }
     existing.retryCount = 0;
   }
+  console.log(`[Connect] محاولة الاتصال بـ @${tiktokUser}...`);
   connectRoom(tiktokUser, sessionid || null);
   res.json({ ok: true, username: tiktokUser });
 });
