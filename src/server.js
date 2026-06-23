@@ -1,19 +1,23 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { TikTokLiveConnection, SignConfig } = require('tiktok-live-connector');
+const { TikTokLive } = require('tiktok-live-api');
 
-// ── 🔑 مزود توقيع TikTok (قابل للتكوين) ──
-// يدعم: EulerStream (افتراضي) أو tik.tools أو أي مزود متوافق
-// لاستخدام tik.tools: ضع في Railway env vars:
-//   SIGN_API_KEY=<مفتاح tik.tools>
-//   SIGN_BASE_URL=https://tiktok.tikfinity.com/  (أو الـ URL اللي يعطيه مزودك)
-SignConfig.apiKey = process.env.SIGN_API_KEY
+// ── 🔑 مزود التوقيع: tik.tools ──
+// tik.tools يقدم signing على Free tier (Sandbox: 15 WS, 2,500 req/يوم)
+// احصل على مفتاح مجاني من: https://tik.tools/login
+// ضع في Railway env vars: TIKTOOL_API_KEY=<مفتاحك>
+const TIKTOK_API_KEY = process.env.TIKTOOL_API_KEY
+  || process.env.SIGN_API_KEY
   || process.env.TIKTOOLS_API_KEY
-  || process.env.EULER_API_KEY
-  || 'euler_ZWQwZWU0NWQwNzRmZjZhYmQwZTNlMThkZDE5MDM2MzRhN2ExNjQwNzQzNWU1ZTVmYWY2MzU2';
-if (process.env.SIGN_BASE_URL) SignConfig.baseUrl = process.env.SIGN_BASE_URL;
-console.log('[Sign] Provider:', SignConfig.baseUrl || 'EulerStream (default)', '| Key:', SignConfig.apiKey.slice(0, 10) + '...');
+  || '';
+
+if (!TIKTOK_API_KEY) {
+  console.error('⚠️  [tik.tools] مفتاح API مفقود — احصل على واحد مجاني من https://tik.tools/login');
+  console.error('   ثم أضفه في Railway env vars بالاسم: TIKTOOL_API_KEY');
+} else {
+  console.log('[tik.tools] Provider: tik.tools | Key:', TIKTOK_API_KEY.slice(0, 12) + '...');
+}
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -48,7 +52,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.6.2';
+const VERSION = '2.8.0';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -519,7 +523,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 const rooms = {};
 
 // ── TikTok v1/v2 data normalization ──────────────────────
-// tiktok-live-connector v2.x نقل حقول المستخدم داخل data.user
+// tiktok-live-api v2.x (نفس بنية tiktok-live-connector v2) نقل حقول المستخدم داخل data.user
 // والصورة صارت قائمة روابط في avatarThumb/profilePicture
 function pickUrl(p) {
   if (!p) return null;
@@ -578,9 +582,10 @@ async function connectRoom(username, sessionid = null) {
   io.to(`room:${key}`).emit('room:status', { username: key, status: 'connecting' });
   console.log(`[TikTok] Connecting to @${key}...`);
 
-  const opts = { processInitialData: false, enableExtendedGiftInfo: true, signApiKey: SignConfig.apiKey };
+  const opts = { apiKey: TIKTOK_API_KEY, processInitialData: false, enableExtendedGiftInfo: true };
+  if (sessionid) opts.sessionId = sessionid;
   if (room.sessionid) opts.sessionId = room.sessionid;
-  const tiktok = new TikTokLiveConnection(key, opts);
+  const tiktok = new TikTokLive(key, opts);
   room.tiktok = tiktok;
 
   try {
@@ -769,43 +774,93 @@ async function connectRoom(username, sessionid = null) {
   tiktok.on('follow', (data) => { const usr = extractUser(data); const uid = usr.userId; if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); } broadcast(key, 'follow', { type:'follow', user: usr.nickname, avatar: usr.avatar, ts: Date.now() }); });
   tiktok.on('share', (data) => { const usr = extractUser(data); room.stats.shares = (room.stats.shares || 0) + 1; broadcast(key, 'share', { type:'share', user: usr.nickname, ts: Date.now() }); broadcast(key, 'stats', room.stats); });
   tiktok.on('roomUser', (data) => { room.stats.viewers = data.viewerCount || room.stats.viewers; broadcast(key, 'viewers', { count: data.viewerCount }); broadcast(key, 'stats', room.stats); });
-  tiktok.on('streamEnd', () => { room.status = 'ended'; io.to(`room:${key}`).emit('room:status', { username: key, status: 'ended' }); scheduleRetry(key, 30000, 'stream ended - not live'); });
-  tiktok.on('disconnected', () => { if (room.status === 'connected') { room.status = 'disconnected'; io.to(`room:${key}`).emit('room:status', { username: key, status: 'disconnected' }); scheduleRetry(key, 15000, 'disconnected'); } });
-  tiktok.on('error', (err) => scheduleRetry(key, 15000, String(err?.message || err || '')));
+  tiktok.on('streamEnd', () => {
+    // البث انتهى رسمياً من المستخدم — توقف نظيف، بدون محاولات
+    room.status = 'ended';
+    if (room.retryTimer) { clearTimeout(room.retryTimer); room.retryTimer = null; }
+    console.log(`[TikTok] @${key} انتهى البث رسمياً — توقف نظيف`);
+    io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: '🛑 انتهى البث — اضغط "اتصال" يدوياً عند بدء بث جديد' });
+  });
+  tiktok.on('disconnected', () => {
+    if (room.status === 'connected') {
+      // انقطاع غير متعمد — توقف نظيف، المستخدم يضغط يدوياً
+      room.status = 'offline';
+      if (room.retryTimer) { clearTimeout(room.retryTimer); room.retryTimer = null; }
+      console.log(`[TikTok] @${key} انقطع الاتصال — توقف نظيف`);
+      io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: '⚠️ انقطع الاتصال — اضغط "اتصال" يدوياً للمحاولة مرة ثانية' });
+    }
+  });
+  tiktok.on('error', (err) => {
+    const msg = String(err?.message || err || '');
+    console.log(`[TikTok] خطأ @${key}: ${msg}`);
+    scheduleRetry(key, 0, msg);
+  });
 }
 
-// ── إعادة المحاولة الذكية (تحفظ حصة EulerStream) ─────
-// قبل: 30 محاولة كل 5s → استنزاف حصة الـ Free tier (10/يوم)
-// بعد: 5 محاولات بفواصل أطول + إيقاف ذكي لو المستخدم مش مباشر
-const MAX_RETRIES = 5;
-const NOT_LIVE_COOLDOWN = 5 * 60 * 1000; // 5 دقائق لو المستخدم مش live
+// ── 🛡️ حماية ضد الباند: فحص حالة البث + Rate Limiting ──
+// قبل أي محاولة اتصال، نتحقق من tik.tools أن المستخدم live فعلاً
+// هذا يمنع المحاولات المتكررة التي سببت الباند سابقاً
+async function checkIfLive(username) {
+  if (!TIKTOK_API_KEY) return { isLive: false, error: 'مفتاح API مفقود' };
+  try {
+    const url = `https://api.tik.tools/live/check?uniqueId=${encodeURIComponent(username)}&apiKey=${encodeURIComponent(TIKTOK_API_KEY)}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+      // 404 = user not found, 429 = rate limit
+      if (res.status === 429) return { isLive: false, error: 'تجاوز معدل الطلبات — انتظر دقيقة' };
+      return { isLive: false, error: `فشل التحقق (${res.status})` };
+    }
+    const data = await res.json();
+    return { isLive: !!(data.isLive || data.data?.isLive), data };
+  } catch (err) {
+    console.log('[liveCheck] خطأ:', err.message);
+    return { isLive: false, error: 'فشل الاتصال بـ tik.tools' };
+  }
+}
 
-function scheduleRetry(key, delay = 15000, reason = '') {
-  const room = rooms[key]; if (!room || room.status === 'offline') return;
-  if (room.retryTimer) clearTimeout(room.retryTimer);
-  room.retryCount = (room.retryCount || 0) + 1;
+// Rate limiting صارم لكل user + للسيرفر كله
+const lastConnectAttempt = new Map(); // username → timestamp
+const PER_USER_COOLDOWN = 30 * 1000;   // 30 ثانية بين المحاولات لنفس المستخدم
+let lastGlobalAttempt = 0;
+const GLOBAL_COOLDOWN = 3 * 1000;       // 3 ثوانٍ بين أي محاولات (كل السيرفر)
 
-  // كشف "المستخدم مش live" → فاصل طويل بدل سبام للـ API
+function checkRateLimit(username) {
+  const now = Date.now();
+  const userLast = lastConnectAttempt.get(username) || 0;
+  if (now - userLast < PER_USER_COOLDOWN) {
+    const wait = Math.ceil((PER_USER_COOLDOWN - (now - userLast)) / 1000);
+    return { ok: false, error: `انتظر ${wait} ثانية قبل المحاولة مرة ثانية` };
+  }
+  if (now - lastGlobalAttempt < GLOBAL_COOLDOWN) {
+    return { ok: false, error: 'السيرفر مشغول — جرّب بعد ثوان' };
+  }
+  lastConnectAttempt.set(username, now);
+  lastGlobalAttempt = now;
+  // تنظيف الـ Map من entries قديمة (أكثر من ساعة)
+  if (lastConnectAttempt.size > 100) {
+    for (const [k, v] of lastConnectAttempt) {
+      if (now - v > 3600000) lastConnectAttempt.delete(k);
+    }
+  }
+  return { ok: true };
+}
+
+// 🚫 إلغاء إعادة المحاولة التلقائية كلياً
+// الإصدارات السابقة كانت تعيد المحاولة 5-30 مرة → سبب الباند
+// الآن: محاولة واحدة فقط، المستخدم يضغط "اتصال" يدوياً عند الفشل
+function scheduleRetry(key, delay, reason = '') {
+  const room = rooms[key]; if (!room) return;
+  console.log(`[TikTok] ⛔ توقف الاتصال @${key} (${reason}) — المستخدم يحتاج يضغط "اتصال" يدوياً`);
+  room.status = 'offline';
+  room.retryCount = 0;
+  if (room.retryTimer) { clearTimeout(room.retryTimer); room.retryTimer = null; }
+  // رسالة واضحة للمستخدم — لا محاولات تلقائية
+  let userMsg = 'توقف الاتصال';
   const notLive = /not.*live|offline|stream.*end|room.*not.*found|UserOffline|not.*online/i.test(String(reason));
-  if (notLive) {
-    delay = NOT_LIVE_COOLDOWN;
-    console.log(`[TikTok] @${key} مش مباشر — انتظار ${NOT_LIVE_COOLDOWN/60000} دقيقة قبل المحاولة التالية`);
-    io.to(`room:${key}`).emit('room:status', { username: key, status: 'retrying', retry: room.retryCount, message: `@${key} مش مباشر حالياً — سنحاول كل 5 دقائق` });
-  }
-
-  if (room.retryCount > MAX_RETRIES) {
-    room.status = 'offline';
-    io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: 'توقف الاتصال — اضغط "اتصال" يدوياً عند بدء البث المباشر' });
-    console.log(`[TikTok] @${key} وصل لحد المحاولات (${MAX_RETRIES}) — إيقاف`);
-    return;
-  }
-
-  // فاصل تدريجي للأخطاء العادية: 15s, 30s, 60s, 120s, 240s
-  const actualDelay = notLive ? NOT_LIVE_COOLDOWN : Math.min(delay * Math.pow(2, room.retryCount - 1), 240000);
-  room.status = 'retrying';
-  console.log(`[TikTok] Retry #${room.retryCount}/${MAX_RETRIES} for @${key} in ${Math.round(actualDelay/1000)}s${reason ? ` (${reason})` : ''}`);
-  io.to(`room:${key}`).emit('room:status', { username: key, status: 'retrying', retry: room.retryCount, message: `محاولة ${room.retryCount}/${MAX_RETRIES} بعد ${Math.round(actualDelay/1000)} ثانية` });
-  room.retryTimer = setTimeout(() => connectRoom(key), actualDelay);
+  if (notLive) userMsg = '⚠️ الحساب مش مباشر حالياً — اضغط "اتصال" بعد بدء البث';
+  else if (/sign|signature|429|rate/i.test(String(reason))) userMsg = 'تجاوز معدل الطلبات — انتظر دقيقة وأعد المحاولة';
+  else userMsg = `توقف الاتصال (${reason || 'خطأ'}) — اضغط "اتصال" يدوياً للمحاولة مرة ثانية`;
+  io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: userMsg });
 }
 
 // ── Wheel Store ──────────────────────────────────────────
@@ -1370,7 +1425,25 @@ app.post('/api/connect', async (req, res) => {
     }
   }
 
-  // 🔄 ضغطة "اتصال" يدوية = تصفير عداد المحاولات (يستعيد كامل الـ retries)
+  // 🛡️ طبقة 1: Rate limiting صارم — يمنع الضغط المتكرر على زر الاتصال
+  const rl = checkRateLimit(tiktokUser);
+  if (!rl.ok) {
+    return res.json({ ok: false, error: rl.error });
+  }
+
+  // 🛡️ طبقة 2: فحص حالة البث قبل أي محاولة اتصال — يمنع المحاولات الفاشلة
+  console.log(`[Connect] فحص حالة البث لـ @${tiktokUser}...`);
+  const liveCheck = await checkIfLive(tiktokUser);
+  if (!liveCheck.isLive) {
+    console.log(`[Connect] @${tiktokUser} مش مباشر — رفض الاتصال`);
+    return res.json({
+      ok: false,
+      error: liveCheck.error || '⚠️ الحساب مش مباشر حالياً. ابدأ البث في تيك توك أولاً ثم اضغط "اتصال"'
+    });
+  }
+  console.log(`[Connect] ✅ @${tiktokUser} مباشر — بدء الاتصال`);
+
+  // 🔄 ضغطة "اتصال" يدوية = تصفير العداد + إلغاء أي timer قديم
   const existing = rooms[tiktokUser];
   if (existing) {
     if (existing.retryTimer) { clearTimeout(existing.retryTimer); existing.retryTimer = null; }
