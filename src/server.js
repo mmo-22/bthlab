@@ -36,7 +36,20 @@ const io = new Server(httpServer, {
   httpCompression: false,    // نفس السبب
 });
 
-app.use(express.json({ limit: '2mb' }));
+// ── Body parsing مع التقاط raw كاحتياطي ──
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
+// fallback إضافي: لو الـ Content-Type غلط (مثلاً text/plain من Cloudflare)
+app.use(express.text({ type: '*/*', limit: '2mb' }));
+// post-process: لو req.body من text middleware string، حاول JSON parse
+app.use((req, _res, next) => {
+  if (typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try { req.body = JSON.parse(req.body); } catch(_) {}
+  }
+  next();
+});
 
 // ── Simple cookie parser (no external deps) ──────────────
 app.use((req, res, next) => {
@@ -52,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.8.3';
+const VERSION = '2.8.4';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1416,8 +1429,21 @@ app.get('/api/poll/:username', requireGameAccess, (req, res) => {
 
 // ── REST API ─────────────────────────────────────────────
 app.post('/api/connect', async (req, res) => {
-  const { username, sessionid, key: subKey } = req.body;
-  if (!username) return res.json({ ok: false });
+  // 🔍 Diagnostic: اطبع بالضبط شو يصل من العميل
+  console.log('[Connect] Headers:', { ct: req.headers['content-type'], cf: req.headers['cf-ray'] ? 'YES' : 'no' });
+  console.log('[Connect] Body type:', typeof req.body, 'keys:', Object.keys(req.body || {}));
+
+  // Fallback: لو express.json فشل، حاول استخراج من raw body
+  let body = req.body || {};
+  if (!body.username && req.rawBody) {
+    try { body = JSON.parse(req.rawBody); console.log('[Connect] استرجع من rawBody'); } catch(_) {}
+  }
+
+  const { username, sessionid, key: subKey } = body;
+  if (!username) {
+    console.error('[Connect] ❌ username فاضي! body:', JSON.stringify(body).slice(0, 200));
+    return res.json({ ok: false, error: '⚠️ اليوزرنيم لم يصل للسيرفر — تواصل مع الدعم (E001)' });
+  }
   const tiktokUser = username.toLowerCase().replace('@', '').trim();
 
   // 🔑 فحص أساسي: مفتاح TIKTOOL_API_KEY موجود؟
@@ -1456,7 +1482,7 @@ app.post('/api/connect', async (req, res) => {
     if (existing.retryTimer) { clearTimeout(existing.retryTimer); existing.retryTimer = null; }
     existing.retryCount = 0;
   }
-  console.log(`[Connect] محاولة الاتصال بـ @${tiktokUser}...`);
+  console.log(`[Connect] ✅ محاولة الاتصال بـ @${tiktokUser}...`);
   connectRoom(tiktokUser, sessionid || null);
   res.json({ ok: true, username: tiktokUser });
 });
