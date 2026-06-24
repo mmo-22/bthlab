@@ -386,22 +386,57 @@ async function addRoom() {
   const input = document.getElementById('username-input');
   const sessionInput = document.getElementById('session-input');
   const username = input.value.trim().replace('@','');
-  if (!username) return;
+  if (!username) { showToast('اكتب اليوزرنيم أولاً'); return; }
+
+  const btn = document.getElementById('connect-btn');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري...'; }
 
   const body = { username, sessionid: sessionInput.value.trim() };
   if (userKey) body.key = userKey;
 
-  const res = await apiFetch('/api/connect', { method:'POST', body: JSON.stringify(body) });
-  const data = await res.json();
-  if (data.ok) {
-    myUsername = data.username;
-    roomsData[data.username] = { username: data.username, status:'connecting', stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
-    updateConnectUI();
-    render();
-    ensureStatsChannel();
-    showToast('جاري الاتصال بـ @' + data.username + '...');
-  } else if (data.error) {
-    showToast(data.error);
+  try {
+    // ✅ Timeout 15 ثانية بحيث الواجهة ما تتجمد لو السيرفر معلق
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch('/api/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      showToast('❌ خطأ من السيرفر (HTTP ' + res.status + ')');
+      console.error('[addRoom] Bad response:', res.status, txt);
+      return;
+    }
+
+    const data = await res.json();
+    console.log('[addRoom] Response:', data);
+
+    if (data.ok) {
+      myUsername = data.username;
+      roomsData[data.username] = { username: data.username, status:'connecting', stats:{viewers:0,likes:0,diamonds:0,shares:0}, msgCount:0 };
+      updateConnectUI();
+      render();
+      ensureStatsChannel();
+      showToast('جاري الاتصال بـ @' + data.username + '...');
+    } else {
+      showToast(data.error || '❌ فشل الاتصال');
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      showToast('⏱️ السيرفر لم يستجب — حاول مرة ثانية');
+      console.error('[addRoom] Timeout');
+    } else {
+      showToast('❌ خطأ: ' + err.message);
+      console.error('[addRoom] Error:', err);
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
 }
 
@@ -471,19 +506,43 @@ function render() {
 
 function escapeHtml(s) { return String(s||'').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
 
-// زر إعادة المحاولة - يستدعي /api/connect بدون التحقق من Rate Limit
+// زر إعادة المحاولة - مع timeout وحماية كاملة
 async function retryConnect(username) {
   const body = { username };
   if (userKey) body.key = userKey;
-  const res = await apiFetch('/api/connect', { method:'POST', body: JSON.stringify(body) });
-  const data = await res.json();
-  if (data.ok) {
-    showToast('جاري إعادة الاتصال بـ @' + username + '...');
-    if (roomsData[username]) { roomsData[username].status = 'connecting'; roomsData[username].errorMsg = ''; render(); }
-  } else if (data.error) {
-    showToast(data.error);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch('/api/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json();
+    if (data.ok) {
+      showToast('جاري إعادة الاتصال بـ @' + username + '...');
+      if (roomsData[username]) { roomsData[username].status = 'connecting'; roomsData[username].errorMsg = ''; render(); }
+    } else if (data.error) {
+      showToast(data.error);
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') showToast('⏱️ السيرفر لم يستجب');
+    else showToast('❌ خطأ: ' + err.message);
+    console.error('[retryConnect]', err);
   }
 }
+
+// 🛡️ معالج أخطاء عام - يمنع تجمد الواجهة لو حصل أي JS error
+window.addEventListener('error', (e) => {
+  console.error('[Global Error]', e.error || e.message);
+  try { showToast('⚠️ حدث خطأ — افتح Console (F12) للتفاصيل'); } catch(_) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[Unhandled Promise]', e.reason);
+  try { showToast('⚠️ خطأ غير متوقع — افتح Console (F12)'); } catch(_) {}
+});
 
 document.getElementById('username-input').addEventListener('keydown', e => { if (e.key === 'Enter') addRoom(); });
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
