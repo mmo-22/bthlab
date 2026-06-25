@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.8.5';
+const VERSION = '2.8.6';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -602,12 +602,45 @@ async function connectRoom(username, sessionid = null) {
   room.tiktok = tiktok;
 
   try {
-    const state = await tiktok.connect();
-    room.status = 'connected'; room.retryCount = 0;
-    room.stats.viewers = state.viewerCount || 0;
-    console.log(`[TikTok] ✅ Connected @${key}`);
-    io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers: state.viewerCount });
-    broadcast(key, 'stats', room.stats);
+    // مكتبة tik.tools ترجع undefined من connect() - الحالة تجي عبر حدث 'connected'
+    // فنحط listener أولاً ثم نطلب الاتصال
+    let connectedState = null;
+    tiktok.on('connected', (state) => {
+      connectedState = state || {};
+      room.status = 'connected';
+      room.retryCount = 0;
+      // viewerCount قد يكون في state.viewerCount أو state.roomInfo.user_count
+      const viewers = state?.viewerCount
+        || state?.roomInfo?.user_count
+        || state?.roomInfo?.viewerCount
+        || 0;
+      room.stats.viewers = viewers;
+      console.log(`[TikTok] ✅ Connected @${key} (viewers: ${viewers})`);
+      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers });
+      broadcast(key, 'stats', room.stats);
+    });
+
+    // محاولة الاتصال — قد ترجع undefined لكن الحدث connected يطلق بنجاح
+    const ret = await tiktok.connect();
+    // لو المكتبة رجعت state بدلاً من الحدث، استخدمه
+    if (ret && !connectedState) {
+      connectedState = ret;
+      room.status = 'connected';
+      room.retryCount = 0;
+      const viewers = ret.viewerCount || ret.roomInfo?.user_count || 0;
+      room.stats.viewers = viewers;
+      console.log(`[TikTok] ✅ Connected @${key} (viewers: ${viewers}, via return)`);
+      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers });
+      broadcast(key, 'stats', room.stats);
+    }
+    // لو لا حدث connected ولا return — اعتبره ناجح بدون viewers
+    if (!connectedState) {
+      room.status = 'connected';
+      room.retryCount = 0;
+      console.log(`[TikTok] ✅ Connected @${key} (silent)`);
+      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers: 0 });
+      broadcast(key, 'stats', room.stats);
+    }
   } catch(err) {
     const msg = err.message || String(err) || 'unknown';
     let userMsg = '';
