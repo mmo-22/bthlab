@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.8.4';
+const VERSION = '2.8.5';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1429,62 +1429,50 @@ app.get('/api/poll/:username', requireGameAccess, (req, res) => {
 
 // ── REST API ─────────────────────────────────────────────
 app.post('/api/connect', async (req, res) => {
-  // 🔍 Diagnostic: اطبع بالضبط شو يصل من العميل
-  console.log('[Connect] Headers:', { ct: req.headers['content-type'], cf: req.headers['cf-ray'] ? 'YES' : 'no' });
-  console.log('[Connect] Body type:', typeof req.body, 'keys:', Object.keys(req.body || {}));
+  console.log('[Connect] ━━━ طلب جديد ━━━');
+  console.log('[Connect] body:', JSON.stringify(req.body || {}).slice(0, 300));
 
-  // Fallback: لو express.json فشل، حاول استخراج من raw body
+  // 1) استخراج username (دعم raw body كاحتياطي)
   let body = req.body || {};
   if (!body.username && req.rawBody) {
-    try { body = JSON.parse(req.rawBody); console.log('[Connect] استرجع من rawBody'); } catch(_) {}
+    try { body = JSON.parse(req.rawBody); } catch(_) {}
   }
+  const username = String(body.username || '').trim().replace('@', '').toLowerCase();
+  const sessionid = body.sessionid || null;
+  const subKey = body.key || '';
 
-  const { username, sessionid, key: subKey } = body;
+  // 2) فحص أساسي فقط: username موجود
   if (!username) {
-    console.error('[Connect] ❌ username فاضي! body:', JSON.stringify(body).slice(0, 200));
-    return res.json({ ok: false, error: '⚠️ اليوزرنيم لم يصل للسيرفر — تواصل مع الدعم (E001)' });
-  }
-  const tiktokUser = username.toLowerCase().replace('@', '').trim();
-
-  // 🔑 فحص أساسي: مفتاح TIKTOOL_API_KEY موجود؟
-  if (!TIKTOK_API_KEY) {
-    console.error('❌ [Connect] رفض: مفتاح TIKTOOL_API_KEY غير محدد في env vars');
-    return res.json({
-      ok: false,
-      error: '⚠️ مفتاح tik.tools غير مهيأ. تواصل مع الدعم.'
-    });
+    console.log('[Connect] ❌ username فاضي');
+    return res.json({ ok: false, error: 'اكتب اليوزرنيم' });
   }
 
-  // If subscriber key provided, enforce assigned username
-  if (subKey) {
+  // 3) فحص المفتاح (لو موجود) - بدون منع التغيير، فقط ربط إذا أول مرة
+  if (subKey && subscribers[subKey]) {
     const sub = subscribers[subKey];
-    if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
-      return res.json({ ok: false, error: 'مفتاح غير صالح' });
-    }
-    if (sub.tiktokUsername && sub.tiktokUsername !== tiktokUser) {
-      return res.json({ ok: false, error: 'لا يمكنك تغيير اليوزرنيم. تواصل مع الدعم لتغييره.' });
-    }
-    if (!sub.tiktokUsername) {
-      sub.tiktokUsername = tiktokUser;
-      saveSubscribers(subscribers);
+    if (sub.active && new Date(sub.expiresAt) >= new Date()) {
+      if (!sub.tiktokUsername) {
+        sub.tiktokUsername = username;
+        saveSubscribers(subscribers);
+        console.log(`[Connect] ربط ${username} بمفتاح المشترك`);
+      } else if (sub.tiktokUsername !== username) {
+        console.log(`[Connect] ❌ المشترك مربوط بـ ${sub.tiktokUsername} لا يقدر يتصل بـ ${username}`);
+        return res.json({ ok: false, error: `حسابك مربوط بـ @${sub.tiktokUsername} — تواصل مع الدعم لتغييره` });
+      }
     }
   }
 
-  // 🛡️ Rate limiting صارم
-  const rl = checkRateLimit(tiktokUser);
-  if (!rl.ok) {
-    return res.json({ ok: false, error: rl.error });
-  }
-
-  // 🔄 ضغطة "اتصال" يدوية = تصفير العداد + إلغاء أي timer قديم
-  const existing = rooms[tiktokUser];
-  if (existing) {
-    if (existing.retryTimer) { clearTimeout(existing.retryTimer); existing.retryTimer = null; }
+  // 4) إلغاء أي retry قديم وبدء الاتصال مباشرة
+  const existing = rooms[username];
+  if (existing && existing.retryTimer) {
+    clearTimeout(existing.retryTimer);
+    existing.retryTimer = null;
     existing.retryCount = 0;
   }
-  console.log(`[Connect] ✅ محاولة الاتصال بـ @${tiktokUser}...`);
-  connectRoom(tiktokUser, sessionid || null);
-  res.json({ ok: true, username: tiktokUser });
+
+  console.log(`[Connect] ✅ بدء الاتصال بـ @${username}`);
+  connectRoom(username, sessionid);
+  res.json({ ok: true, username });
 });
 
 app.post('/api/disconnect', requireGameAccess, (req, res) => {
