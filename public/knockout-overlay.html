@@ -96,12 +96,12 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </div>
 <script>
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-const __auth=(function(){var p=new URLSearchParams(location.search);return{key:p.get('key')||'',pw:p.get('pw')||''};})();
-const socket = io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});if(username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });
+var __auth={key:params.get('key')||'',pw:params.get('pw')||''};
+var socket=io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});
+if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});
 // auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
-socket.on('connect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
-socket.io.on('reconnect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
-
+socket.on('connect',function(){try{if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});}catch(e){}});
+socket.io.on('reconnect',function(){try{if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});}catch(e){}});
 var timerInt=null,COLORS=['#ef4444','#fbbf24','#1dba72','#3b82f6','#a855f7','#ec4899'];
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 

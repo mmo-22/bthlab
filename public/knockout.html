@@ -2,8 +2,6 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/png" href="/favicon.png">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>بطولة خروج - تحكم</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
@@ -45,11 +43,6 @@
   .q-item.used{opacity:.2}
   .q-item-text{font-size:13px;font-weight:700}
   .q-item-correct{font-size:11px;color:var(--green)}
-
-  .open-overlay-btn { display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:900; padding:9px 16px; border-radius:10px; cursor:pointer; text-decoration:none; transition:.2s; box-shadow:0 8px 20px -8px #8b5cf6; }
-  .open-overlay-btn:hover { transform:translateY(-2px); box-shadow:0 12px 26px -8px #8b5cf6; }
-  .overlay-actions { display:flex; gap:8px; align-items:stretch; margin-top:6px; flex-wrap:wrap; }
-  .overlay-actions .overlay-link { flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -115,26 +108,12 @@
   <div class="card">
     <div class="card-title">🔗 رابط الـ Overlay</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <div class="overlay-actions"><div class="overlay-link" id="overlay-link" style="flex:1">—</div><a class="open-overlay-btn" href="#" id="open-overlay-link" target="_blank" rel="noopener" onclick="return openOverlayInNewTab(this)">🚀 فتح الأوفرلاي</a></div>
+      <div class="overlay-link" id="overlay-link" style="flex:1">—</div>
       <button class="btn" onclick="copyLink()" style="background:var(--red);color:#fff;padding:10px 16px;font-size:13px">📋 نسخ</button>
     </div>
   </div>
 </div>
 <script>
-
-// 🔒 sanitize URL — حفظ المفاتيح وتنظيف الرابط
-(function(){
-  var p = new URLSearchParams(location.search);
-  var k = p.get('key'), pw = p.get('pw');
-  if (k) localStorage.setItem('subscription_key', k);
-  if (pw) localStorage.setItem('owner_password', pw);
-  if (k || pw) {
-    var cu = new URL(location.href);
-    cu.searchParams.delete('key'); cu.searchParams.delete('pw');
-    history.replaceState({}, '', cu.pathname + (cu.search || '') + (cu.hash || ''));
-  }
-})();
-
 var QS=[
   {q:"ما عاصمة فرنسا؟",opts:["لندن","باريس","برلين","مدريد"],correct:2},
   {q:"كم عدد قارات العالم؟",opts:["5","6","7","8"],correct:3},
@@ -360,9 +339,13 @@ var QS=[
   {q:"كم عدد الأنبياء المذكورين في القرآن؟",opts:["20","25","28","30"],correct:2},
 ];
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
-var socket=io({ auth: __auth });if(username)socket.emit('join',{username});
-document.getElementById('overlay-link').textContent=location.origin+'/knockout-overlay.html?username='+username;
+var __auth={key:params.get('key')||'',pw:params.get('pw')||''};
+function _api(url){if(!__auth.key&&!__auth.pw)return url;var sep=url.indexOf('?')>=0?'&':'?';var qs=[];if(__auth.key)qs.push('key='+encodeURIComponent(__auth.key));if(__auth.pw)qs.push('pw='+encodeURIComponent(__auth.pw));return url+sep+qs.join('&');}
+var socket=io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});
+if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});
+socket.on('connect',function(){try{if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});}catch(e){}});
+socket.io.on('reconnect',function(){try{if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});}catch(e){}});
+document.getElementById('overlay-link').textContent=location.origin+'/knockout-overlay.html?username='+username+(__auth.key?'&key='+encodeURIComponent(__auth.key):(__auth.pw?'&pw='+encodeURIComponent(__auth.pw):''));
 function copyLink(){navigator.clipboard.writeText(document.getElementById('overlay-link').textContent);document.getElementById('overlay-link').style.borderColor='#1dba72';setTimeout(function(){document.getElementById('overlay-link').style.borderColor='';},1000);}
 
 var correctAnswer=1,usedQs=new Set();
@@ -411,17 +394,17 @@ function autoNext(){
 }
 
 async function openRegistration(){
-  await fetch('/api/knockout/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,keyword:document.getElementById('keyword').value.trim(),maxPlayers:parseInt(document.getElementById('max-players').value)||16})});
+  await fetch(_api('/api/knockout/register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,keyword:document.getElementById('keyword').value.trim(),maxPlayers:parseInt(document.getElementById('max-players').value)||16})});
   document.getElementById('status-badge').textContent='📝 تسجيل';document.getElementById('status-badge').classList.add('active');
   loadPlayers();
 }
 async function lockRegistration(){
-  await fetch('/api/knockout/lock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+  await fetch(_api('/api/knockout/lock'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
   document.getElementById('status-badge').textContent='🔒 جاهز';loadPlayers();
 }
 async function askQ(q,opts,correct){
   var at=parseInt(document.getElementById('answer-time').value)||15;
-  await fetch('/api/knockout/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,question:q,options:opts,correct:correct,answerTime:at})});
+  await fetch(_api('/api/knockout/ask'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,question:q,options:opts,correct:correct,answerTime:at})});
   document.getElementById('status-badge').textContent='❓ سؤال';
 }
 async function askCustom(){
@@ -438,11 +421,11 @@ async function nextFromBank(){
   await askQ(pick.q,pick.opts,pick.correct);
   renderBank();
 }
-async function revealAnswer(){await fetch('/api/knockout/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});setTimeout(loadPlayers,1000);}
-async function stopGame(){await fetch('/api/knockout/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});document.getElementById('status-badge').textContent='متوقف';document.getElementById('status-badge').classList.remove('active');}
+async function revealAnswer(){await fetch(_api('/api/knockout/reveal'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});setTimeout(loadPlayers,1000);}
+async function stopGame(){await fetch(_api('/api/knockout/stop'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});document.getElementById('status-badge').textContent='متوقف';document.getElementById('status-badge').classList.remove('active');}
 
 async function loadPlayers(){
-  var res=await fetch('/api/knockout/'+username);var data=await res.json();
+  var res=await fetch(_api('/api/knockout/'+username));var data=await res.json();
   document.getElementById('s-alive').textContent=data.aliveCount||0;
   document.getElementById('s-round').textContent=data.round||0;
   document.getElementById('s-elim').textContent=(data.eliminated||[]).length;
@@ -473,27 +456,6 @@ socket.on('knockout:answered',function(d){
   document.getElementById('status-badge').textContent='❓ '+d.count+'/'+d.total+' جاوبوا';
 });
 renderBank();if(username)loadPlayers();
-
-// ── Open overlay in new tab (BthLab) ───────────────────
-function openOverlayInNewTab(a) {
-  var el = document.getElementById('overlay-link');
-  var url = (el && el.textContent || '').trim();
-  if (!url || url.indexOf('http') !== 0) {
-    alert('اتصل بالبث أولاً للحصول على رابط الأوفرلاي');
-    return false;
-  }
-  a.href = url;
-  return true;
-}
-// حدّث href تلقائياً إذا تغيّر النص (مرّة كل ثانية يكفي ولا يحمّل شي)
-setInterval(function() {
-  var el = document.getElementById('overlay-link');
-  var btn = document.getElementById('open-overlay-link');
-  if (!el || !btn) return;
-  var url = (el.textContent || '').trim();
-  if (url.indexOf('http') === 0 && btn.getAttribute('href') !== url) btn.setAttribute('href', url);
-}, 1000);
-
 </script>
 </body>
 </html>
