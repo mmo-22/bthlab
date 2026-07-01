@@ -9,6 +9,25 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+/* 🔬 مؤشر تشخيص - يظهر حالة الاتصال في زاوية الشاشة */
+#bthlab-diag {
+  position: fixed !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 999999 !important;
+  background: rgba(0,0,0,.85) !important;
+  color: #fff !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  border: 1.5px solid #fbbf24 !important;
+  pointer-events: none !important;
+  transition: opacity .4s !important;
+}
+#bthlab-diag.ok { border-color: #10b981 !important; }
+#bthlab-diag.err { border-color: #ef4444 !important; }
 /* 🔥 حل قطعي لشاشة سوداء في TikTok LIVE Studio - شفافية مضمونة */
 html, body { background: transparent !important; background-color: rgba(0,0,0,0) !important; }
 :root { color-scheme: light dark; }
@@ -92,6 +111,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </script>
 </head>
 <body>
+<div id="bthlab-diag">🟡 يتصل...</div>
 <div class="main-box" id="box">
   <div class="game-title">⚔️ <span class="red">حرب</span> <span class="blue">الكلمات</span></div>
   <div class="category-bar" id="category">—</div>
@@ -413,6 +433,68 @@ function fireConfetti() {
     setTimeout(() => p.remove(), 2100);
   }
 }
+</script>
+<script>
+// 🔬 مؤشر تشخيص للأوفرلاي - يعرض حالة الاتصال
+(function(){
+  var el = document.getElementById('bthlab-diag');
+  if (!el) return;
+  var joinedRoom = false;
+  var checkInterval = setInterval(function(){
+    if (typeof socket === 'undefined') return;
+    clearInterval(checkInterval);
+    
+    var qs = new URLSearchParams(location.search);
+    var u = qs.get('username') || '';
+    var hasKey = !!(qs.get('key') || qs.get('pw'));
+    
+    if (!u) {
+      el.className = 'err';
+      el.textContent = '❌ URL ناقص username';
+      return;
+    }
+    if (!hasKey) {
+      el.className = 'err';
+      el.textContent = '⚠️ URL ناقص key';
+      return;
+    }
+    
+    function update() {
+      if (socket.connected) {
+        el.className = 'ok';
+        el.textContent = joinedRoom ? ('🟢 متصل · @' + u) : ('🟡 انضمام...');
+        if (joinedRoom) {
+          setTimeout(function(){ el.style.opacity = '0'; setTimeout(function(){ el.style.display = 'none'; }, 400); }, 8000);
+        }
+      } else {
+        el.className = '';
+        el.textContent = '🟡 يتصل بالسيرفر...';
+        el.style.opacity = '1';
+        el.style.display = 'block';
+      }
+    }
+    
+    socket.on('connect', update);
+    socket.on('disconnect', function(){
+      el.className = 'err';
+      el.textContent = '🔴 انقطع الاتصال';
+      el.style.opacity = '1';
+      el.style.display = 'block';
+    });
+    socket.on('connect_error', function(err){
+      el.className = 'err';
+      el.textContent = '❌ فشل: ' + (err.message||'').slice(0,25);
+      el.style.opacity = '1';
+      el.style.display = 'block';
+    });
+    // نعرف إن انضممنا للقناة لما يوصل أي event من السيرفر
+    var origOn = socket.on.bind(socket);
+    ['stats','room:status','wheel:update','knockout:register','knockout:question','password:update','quiz:start','poll:start','word-war:update','guess:update','history','viewers'].forEach(function(evt){
+      socket.on(evt, function(){ if (!joinedRoom) { joinedRoom = true; update(); } });
+    });
+    update();
+  }, 50);
+})();
 </script>
 </body>
 </html>

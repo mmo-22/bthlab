@@ -9,6 +9,25 @@
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+/* 🔬 مؤشر تشخيص - يظهر حالة الاتصال في زاوية الشاشة */
+#bthlab-diag {
+  position: fixed !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 999999 !important;
+  background: rgba(0,0,0,.85) !important;
+  color: #fff !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  border: 1.5px solid #fbbf24 !important;
+  pointer-events: none !important;
+  transition: opacity .4s !important;
+}
+#bthlab-diag.ok { border-color: #10b981 !important; }
+#bthlab-diag.err { border-color: #ef4444 !important; }
 /* 🔥 حل قطعي لشاشة سوداء في TikTok LIVE Studio - شفافية مضمونة */
 html, body { background: transparent !important; background-color: rgba(0,0,0,0) !important; }
 :root { color-scheme: light dark; }
@@ -90,6 +109,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </script>
 </head>
 <body>
+<div id="bthlab-diag">🟡 يتصل...</div>
 <div class="main" id="box">
   <div class="title">🏆 <span>بطولة خروج</span></div>
   <div class="phase-label" id="phase-label"></div>
@@ -252,6 +272,68 @@ function renderAlive(aliveCount, totalCount){
 var totalRegistered = 0;
 function show(){document.getElementById('box').classList.add('show');}
 function fireConfetti(){var layer=document.getElementById('confetti-layer'),box=document.getElementById('box'),cx=box.offsetWidth/2,cy=box.offsetHeight/2;for(var i=0;i<40;i++){var p=document.createElement('div');p.style.cssText='position:absolute;width:8px;height:12px;left:'+cx+'px;top:'+cy+'px;background:'+COLORS[i%COLORS.length]+';border-radius:2px;';layer.appendChild(p);var a=Math.random()*Math.PI*2,d=100+Math.random()*220;p.animate([{transform:'translate(0,0) rotate(0deg)',opacity:1},{transform:'translate('+Math.cos(a)*d+'px,'+Math.sin(a)*d+'px) rotate('+(720+Math.random()*720)+'deg)',opacity:0}],{duration:1500+Math.random()*500,easing:'cubic-bezier(0.4,0,0.6,1)'});setTimeout(function(el){el.remove()}.bind(null,p),2100);}}
+</script>
+<script>
+// 🔬 مؤشر تشخيص للأوفرلاي - يعرض حالة الاتصال
+(function(){
+  var el = document.getElementById('bthlab-diag');
+  if (!el) return;
+  var joinedRoom = false;
+  var checkInterval = setInterval(function(){
+    if (typeof socket === 'undefined') return;
+    clearInterval(checkInterval);
+    
+    var qs = new URLSearchParams(location.search);
+    var u = qs.get('username') || '';
+    var hasKey = !!(qs.get('key') || qs.get('pw'));
+    
+    if (!u) {
+      el.className = 'err';
+      el.textContent = '❌ URL ناقص username';
+      return;
+    }
+    if (!hasKey) {
+      el.className = 'err';
+      el.textContent = '⚠️ URL ناقص key';
+      return;
+    }
+    
+    function update() {
+      if (socket.connected) {
+        el.className = 'ok';
+        el.textContent = joinedRoom ? ('🟢 متصل · @' + u) : ('🟡 انضمام...');
+        if (joinedRoom) {
+          setTimeout(function(){ el.style.opacity = '0'; setTimeout(function(){ el.style.display = 'none'; }, 400); }, 8000);
+        }
+      } else {
+        el.className = '';
+        el.textContent = '🟡 يتصل بالسيرفر...';
+        el.style.opacity = '1';
+        el.style.display = 'block';
+      }
+    }
+    
+    socket.on('connect', update);
+    socket.on('disconnect', function(){
+      el.className = 'err';
+      el.textContent = '🔴 انقطع الاتصال';
+      el.style.opacity = '1';
+      el.style.display = 'block';
+    });
+    socket.on('connect_error', function(err){
+      el.className = 'err';
+      el.textContent = '❌ فشل: ' + (err.message||'').slice(0,25);
+      el.style.opacity = '1';
+      el.style.display = 'block';
+    });
+    // نعرف إن انضممنا للقناة لما يوصل أي event من السيرفر
+    var origOn = socket.on.bind(socket);
+    ['stats','room:status','wheel:update','knockout:register','knockout:question','password:update','quiz:start','poll:start','word-war:update','guess:update','history','viewers'].forEach(function(evt){
+      socket.on(evt, function(){ if (!joinedRoom) { joinedRoom = true; update(); } });
+    });
+    update();
+  }, 50);
+})();
 </script>
 </body>
 </html>
