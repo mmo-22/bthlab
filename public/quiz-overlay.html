@@ -2,11 +2,17 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="rgba(0,0,0,0)">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="/favicon.png">
 <title>Quiz Overlay</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+/* 🔥 حل قطعي لشاشة سوداء في TikTok LIVE Studio - شفافية مضمونة */
+html, body { background: transparent !important; background-color: rgba(0,0,0,0) !important; }
+:root { color-scheme: light dark; }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { background:transparent; width:100vw; height:100vh; font-family:'Tajawal',sans-serif; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; padding-bottom:30px; }
 body.mobile{transform:scale(0.55);transform-origin:center center;}
@@ -28,6 +34,22 @@ body.mobile{transform:scale(0.55);transform-origin:center center;}
 #winner-bar { display:none; text-align:center; padding:10px; margin-top:8px; background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.35); border-radius:12px; color:#fde68a; font-weight:900; font-size:16px; box-shadow:0 0 24px -10px rgba(245,158,11,.5); }
 50%{opacity:.35} }
 </style>
+<script>
+// 🔥 فرض شفافية HTML/body في TikTok LIVE Studio WebView
+(function(){
+  var setTransparent = function(){
+    document.documentElement.style.background = 'transparent';
+    document.documentElement.style.backgroundColor = 'rgba(0,0,0,0)';
+    if(document.body){
+      document.body.style.background = 'transparent';
+      document.body.style.backgroundColor = 'rgba(0,0,0,0)';
+    }
+  };
+  setTransparent();
+  document.addEventListener('DOMContentLoaded', setTransparent);
+  window.addEventListener('load', setTransparent);
+})();
+</script>
 </head>
 <body>
 <div id="container">
