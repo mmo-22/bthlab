@@ -111,6 +111,14 @@ const OVERLAYS = [
   { icon:'🏆', name:'بطولة الخروج', desc:'الأسئلة والإقصاء', page:'knockout-overlay.html', userParam:'username', size:'1920 × 1080', color:'#ff6b9d' },
 ];
 
+// 🚨 تحذير إذا الـ KEY فاضي - الأوفرلاي ما راح يشتغل
+if (!KEY && !PW) {
+  const warn = document.createElement('div');
+  warn.style.cssText = 'background:rgba(239,68,68,.15);border:1.5px solid #ef4444;padding:14px;border-radius:10px;margin-bottom:14px;color:#fecaca;text-align:center;font-weight:700';
+  warn.innerHTML = '⚠️ لم يتم العثور على مفتاح الاشتراك — الأوفرلاي لن يشتغل في TikTok LIVE Studio<br><a href="admin.html" style="color:#25f4ee;text-decoration:underline;margin-top:6px;display:inline-block">🔙 ارجع للوحة الإدارة أولاً</a>';
+  document.body.insertBefore(warn, document.body.firstChild);
+}
+
 function buildUrl(ov) {
   const u = document.getElementById('username').value.trim().replace('@','');
   if (!u) return '';

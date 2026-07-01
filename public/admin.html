@@ -496,7 +496,7 @@ function render() {
       '<div class="bx stat" style="--c:#ec4899"><div class="v" id="stat-likes">❤️ ' + (stats.likes||0).toLocaleString() + '</div><div class="l">الإعجابات</div></div>' +
       '<div class="bx stat" style="--c:#f59e0b"><div class="v" id="stat-diamonds">💎 ' + (stats.diamonds||0).toLocaleString() + '</div><div class="l">الدياموند</div></div>' +
       '<div class="bx stat" style="--c:#10b981"><div class="v" id="stat-shares">🔁 ' + (stats.shares||0).toLocaleString() + '</div><div class="l">المشاركات</div></div>' +
-      '<a class="bx game" style="--c:#8b5cf6;grid-column:1/-1" href="obs-links.html?username=' + r.username + '" target="_blank">' +
+      '<a class="bx game" style="--c:#8b5cf6;grid-column:1/-1" href="obs-links.html?username=' + r.username + (userKey ? '&key=' + encodeURIComponent(userKey) : '') + '" target="_blank">' +
       '<span class="gi">📺</span><div><div class="gn">OBS Link Generator</div><div class="gs">ولّد روابط كل الأوفرلايات الجاهزة للبث</div></div><span class="go">←</span></a>' +
       '<div class="games-label">🎮 الفعاليات — اضغط لفتح لوحة التحكم</div>' +
       gamesHtml +

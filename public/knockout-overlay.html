@@ -284,7 +284,7 @@ function fireConfetti(){var layer=document.getElementById('confetti-layer'),box=
     clearInterval(checkInterval);
     
     var qs = new URLSearchParams(location.search);
-    var u = qs.get('username') || '';
+    var u = qs.get('username') || qs.get('user') || '';
     var hasKey = !!(qs.get('key') || qs.get('pw'));
     
     if (!u) {
