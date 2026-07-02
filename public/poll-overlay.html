@@ -85,6 +85,8 @@ const params = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey = params.get('key') || '';
 const __auth=(function(){var p=new URLSearchParams(location.search);var k=p.get('key')||'',w=p.get('pw')||'';try{if(!k)k=localStorage.getItem('subscription_key')||'';if(!w)w=localStorage.getItem('owner_password')||'';}catch(e){}return{key:k,pw:w};})();
+function _api(url){if(!__auth.key&&!__auth.pw)return url;var s=url.indexOf('?')>=0?'&':'?';var q=[];if(__auth.key)q.push('key='+encodeURIComponent(__auth.key));if(__auth.pw)q.push('pw='+encodeURIComponent(__auth.pw));return url+s+q.join('&');}
+
 const socket = io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
 
 // auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
