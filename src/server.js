@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.4';
+const VERSION = '2.9.5';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1596,7 +1596,14 @@ io.on('connection', (socket) => {
         console.log(`[Join] ❌ رفض @${key}: لا اشتراك صالح (joinKey: ${joinKey ? joinKey.slice(0,8)+'..' : 'فاضي'}, cookie: ${socket._subKey ? 'موجود' : 'لا'})`);
         return;
       }
-      if (socket._sub.tiktokUsername !== key) {
+      // ✅ إذا الاشتراك صالح لكن اليوزرنيم غير مربوط بعد — اربطه تلقائياً
+      // (نفس سلوك /api/connect — يحل مشكلة فتح الأوفرلاي قبل أول اتصال باللوحة)
+      if (!socket._sub.tiktokUsername) {
+        socket._sub.tiktokUsername = key;
+        saveSubscribers(subscribers);
+        console.log(`[Join] 🔗 ربط تلقائي: @${key} بمفتاح ${socket._subKey ? socket._subKey.slice(0,8)+'..' : '?'}`);
+      }
+      if (String(socket._sub.tiktokUsername).toLowerCase().trim() !== key) {
         console.log(`[Join] ❌ رفض @${key}: الاشتراك مربوط بـ @${socket._sub.tiktokUsername}`);
         return;
       }
