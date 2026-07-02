@@ -162,7 +162,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile");
 const params = new URLSearchParams(location.search);
 const cfg = { username: params.get('username') || '' };
-const __auth=(function(){var p=new URLSearchParams(location.search);return{key:p.get('key')||'',pw:p.get('pw')||''};})();
+const __auth=(function(){var p=new URLSearchParams(location.search);var k=p.get('key')||'',w=p.get('pw')||'';try{if(!k)k=localStorage.getItem('subscription_key')||'';if(!w)w=localStorage.getItem('owner_password')||'';}catch(e){}return{key:k,pw:w};})();
 const socket = io({ auth:__auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
 // auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
 socket.on('connect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
@@ -187,7 +187,7 @@ function applyColors(red, blue) {
 
 function joinRoom() {
   if (!cfg.username) return;
-  socket.emit('join', { username: cfg.username });
+  socket.emit('join', { username: cfg.username, key: __auth.key, pw: __auth.pw });
   fetch(_api(`/api/word-war/${cfg.username}`)).then(r=>r.json()).then(d => {
     if (d.active) {
       document.getElementById('category').textContent = d.category;
@@ -289,6 +289,12 @@ socket.on('word-war:join', ({ team, player, avatar, redCount, blueCount }) => {
 // Listen for visible count changes
 socket.on('word-war:reg-visible', function(d) {
   regVisibleCount = d.count || 10;
+});
+
+// تحديث العدادات عند حذف لاعب من فريق (من صفحة التحكم)
+socket.on('word-war:player-removed', function(d) {
+  document.querySelector('.team-score.red .team-label').textContent = '🔴 الأحمر (' + d.redCount + ')';
+  document.querySelector('.team-score.blue .team-label').textContent = '🔵 الأزرق (' + d.blueCount + ')';
 });
 
 function showJoinConfirm(team, name) {
@@ -446,7 +452,7 @@ function fireConfetti() {
     
     var qs = new URLSearchParams(location.search);
     var u = qs.get('username') || qs.get('user') || '';
-    var hasKey = !!(qs.get('key') || qs.get('pw'));
+    var hasKey = !!(qs.get('key') || qs.get('pw') || (typeof __auth !== 'undefined' && (__auth.key || __auth.pw)));
     
     if (!u) {
       el.className = 'err';

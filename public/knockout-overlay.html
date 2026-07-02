@@ -138,7 +138,7 @@ html,body{background:transparent;width:100vw;height:100vh;font-family:'Tajawal',
 </div>
 <script>
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-var __auth={key:params.get('key')||'',pw:params.get('pw')||''};
+var __auth=(function(){var k=params.get('key')||'',w=params.get('pw')||'';try{if(!k)k=localStorage.getItem('subscription_key')||'';if(!w)w=localStorage.getItem('owner_password')||'';}catch(e){}return{key:k,pw:w};})();
 var socket=io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});
 if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});
 // auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
@@ -285,7 +285,7 @@ function fireConfetti(){var layer=document.getElementById('confetti-layer'),box=
     
     var qs = new URLSearchParams(location.search);
     var u = qs.get('username') || qs.get('user') || '';
-    var hasKey = !!(qs.get('key') || qs.get('pw'));
+    var hasKey = !!(qs.get('key') || qs.get('pw') || (typeof __auth !== 'undefined' && (__auth.key || __auth.pw)));
     
     if (!u) {
       el.className = 'err';

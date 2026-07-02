@@ -339,7 +339,7 @@ var QS=[
   {q:"كم عدد الأنبياء المذكورين في القرآن؟",opts:["20","25","28","30"],correct:2},
 ];
 var params=new URLSearchParams(location.search),username=params.get('username')||'';
-var __auth={key:params.get('key')||'',pw:params.get('pw')||''};
+var __auth=(function(){var p=new URLSearchParams(location.search);return{key:p.get('key')||localStorage.getItem('subscription_key')||'',pw:p.get('pw')||localStorage.getItem('owner_password')||''};})();
 function _api(url){if(!__auth.key&&!__auth.pw)return url;var sep=url.indexOf('?')>=0?'&':'?';var qs=[];if(__auth.key)qs.push('key='+encodeURIComponent(__auth.key));if(__auth.pw)qs.push('pw='+encodeURIComponent(__auth.pw));return url+sep+qs.join('&');}
 var socket=io({auth:__auth,transports:['websocket','polling'],upgrade:true,reconnection:true,reconnectionDelay:500,reconnectionDelayMax:3000,reconnectionAttempts:Infinity,timeout:10000,withCredentials:false});
 if(username)socket.emit('join',{username:username,key:__auth.key,pw:__auth.pw});

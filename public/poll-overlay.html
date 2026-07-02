@@ -84,7 +84,7 @@ if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classL
 const params = new URLSearchParams(location.search);
 let username = params.get('username') || '';
 const authKey = params.get('key') || '';
-const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const __auth=(function(){var p=new URLSearchParams(location.search);var k=p.get('key')||'',w=p.get('pw')||'';try{if(!k)k=localStorage.getItem('subscription_key')||'';if(!w)w=localStorage.getItem('owner_password')||'';}catch(e){}return{key:k,pw:w};})();
 const socket = io({ auth: __auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
 
 // auto-rejoin: يضمن انضمام الأوفرلاي لقناة البث فوراً بعد كل اتصال/إعادة اتصال
@@ -187,7 +187,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
     
     var qs = new URLSearchParams(location.search);
     var u = qs.get('username') || qs.get('user') || '';
-    var hasKey = !!(qs.get('key') || qs.get('pw'));
+    var hasKey = !!(qs.get('key') || qs.get('pw') || (typeof __auth !== 'undefined' && (__auth.key || __auth.pw)));
     
     if (!u) {
       el.className = 'err';

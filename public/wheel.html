@@ -265,7 +265,18 @@ input[type=text]:focus, select:focus { border-color:var(--accent2); }
 
 const params   = new URLSearchParams(location.search);
 const username = params.get('username') || params.get('user') || '';
-const __auth = (function(){ var p = new URLSearchParams(location.search); return { key: p.get('key')||'', pw: p.get('pw')||'' }; })();
+const __auth = (function(){
+  var p = new URLSearchParams(location.search);
+  var key = p.get('key') || localStorage.getItem('subscription_key') || '';
+  var pw  = p.get('pw')  || localStorage.getItem('owner_password')  || '';
+  return { key: key, pw: pw };
+})();
+// يبني جزء المصادقة لرابط الأوفرلاي — بحيث يشتغل في TikTok LIVE Studio
+function __authPart() {
+  if (__auth.key) return '&key=' + encodeURIComponent(__auth.key);
+  if (__auth.pw)  return '&pw='  + encodeURIComponent(__auth.pw);
+  return '';
+}
 const socket   = io({ auth: __auth });
 
 let entries     = [];
@@ -273,7 +284,7 @@ let currentWinner = null;
 
 
 // Set overlay link
-const overlayUrl = `${location.origin}/wheel-overlay.html?username=${username}`;
+const overlayUrl = location.origin + '/wheel-overlay.html?username=' + username + __authPart();
 document.getElementById('overlay-link').textContent = overlayUrl;
 
 // Connect

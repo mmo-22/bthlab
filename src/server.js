@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.2';
+const VERSION = '2.9.4';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1592,11 +1592,16 @@ io.on('connection', (socket) => {
     }
     // 🔒 تحقق: المشترك يقدر ينضم فقط لقناة اليوزرنيم المسجّل عنده، المالك يقدر ينضم لأي قناة
     if (!socket._isOwner) {
-      if (!socket._sub || socket._sub.tiktokUsername !== key) {
-        // محاولة انضمام لقناة غير مسموحة — تجاهل بصمت
+      if (!socket._sub) {
+        console.log(`[Join] ❌ رفض @${key}: لا اشتراك صالح (joinKey: ${joinKey ? joinKey.slice(0,8)+'..' : 'فاضي'}, cookie: ${socket._subKey ? 'موجود' : 'لا'})`);
+        return;
+      }
+      if (socket._sub.tiktokUsername !== key) {
+        console.log(`[Join] ❌ رفض @${key}: الاشتراك مربوط بـ @${socket._sub.tiktokUsername}`);
         return;
       }
     }
+    console.log(`[Join] ✅ @${key} انضم (${socket._isOwner ? 'مالك' : 'مشترك'})`);
     socket.rooms.forEach(room => { if (room.startsWith('room:') && room !== `room:${key}`) socket.leave(room); });
     socket.join(`room:${key}`);
     const room = rooms[key];
