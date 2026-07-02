@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.5';
+const VERSION = '2.9.6';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -491,8 +491,8 @@ app.post('/api/logout', (req, res) => {
 // ── 🔒 حماية API الفعاليات: يتحقق أن المتصل يملك الـ username المطلوب ───
 // المالك يقدر يصل لأي حساب، والمشترك يقدر يصل فقط للحساب المسجّل عنده
 function requireGameAccess(req, res, next) {
-  const key = req.cookies.bthlab_key || req.query.key || '';
-  const pw = req.cookies.bthlab_pw || req.query.pw || '';
+  const key = req.cookies.bthlab_key || req.query.key || req.body?.key || '';
+  const pw = req.cookies.bthlab_pw || req.query.pw || req.body?.pw || '';
   const reqUsername = (req.body?.username || req.query?.username || req.params?.username || '').toLowerCase().replace('@','').trim();
   if (!reqUsername) return res.status(400).json({ ok: false, error: 'username مطلوب' });
   // المالك يمر دائماً
@@ -500,9 +500,17 @@ function requireGameAccess(req, res, next) {
   // المشترك يمر فقط إذا الـ username يطابق المسجّل عنده
   const sub = subscribers[key];
   if (!sub || !sub.active || new Date(sub.expiresAt) < new Date()) {
+    console.log(`[GameAccess] ❌ 401 @${reqUsername}: مفتاح ${key ? key.slice(0,8)+'..' : 'فاضي'} (cookie: ${req.cookies.bthlab_key ? 'نعم' : 'لا'}, query: ${req.query.key ? 'نعم' : 'لا'})`);
     return res.status(401).json({ ok: false, error: 'غير مصرح — سجّل الدخول' });
   }
-  if (sub.tiktokUsername !== reqUsername) {
+  // ✅ ربط تلقائي: إذا الاشتراك صالح لكن اليوزرنيم غير مربوط بعد
+  if (!sub.tiktokUsername) {
+    sub.tiktokUsername = reqUsername;
+    saveSubscribers(subscribers);
+    console.log(`[GameAccess] 🔗 ربط تلقائي: @${reqUsername} بمفتاح ${key.slice(0,8)}..`);
+  }
+  if (String(sub.tiktokUsername).toLowerCase().trim() !== reqUsername) {
+    console.log(`[GameAccess] ❌ 403 @${reqUsername}: الاشتراك مربوط بـ @${sub.tiktokUsername}`);
     return res.status(403).json({ ok: false, error: 'غير مصرح بالوصول لهذا الحساب' });
   }
   next();
