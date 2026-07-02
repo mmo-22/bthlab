@@ -165,8 +165,8 @@ const cfg = { username: params.get('username') || '' };
 const __auth=(function(){var p=new URLSearchParams(location.search);var k=p.get('key')||'',w=p.get('pw')||'';try{if(!k)k=localStorage.getItem('subscription_key')||'';if(!w)w=localStorage.getItem('owner_password')||'';}catch(e){}return{key:k,pw:w};})();
 const socket = io({ auth:__auth, transports:['websocket','polling'], upgrade:true, reconnection:true, reconnectionDelay:500, reconnectionDelayMax:3000, reconnectionAttempts:Infinity, timeout:10000, withCredentials:false });
 // auto-rejoin: ضمان عودة الانضمام للقناة بعد كل اتصال/إعادة اتصال
-socket.on('connect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
-socket.io.on('reconnect',function(){try{if(typeof username!=='undefined'&&username)socket.emit('join', { username: username, key: __auth.key, pw: __auth.pw });}catch(e){}});
+socket.on('connect',function(){try{var u=(typeof cfg!=='undefined'&&cfg.username)||(typeof username!=='undefined'&&username)||'';if(u)socket.emit('join',{username:u,key:__auth.key,pw:__auth.pw});}catch(e){}});
+socket.io.on('reconnect',function(){try{var u=(typeof cfg!=='undefined'&&cfg.username)||(typeof username!=='undefined'&&username)||'';if(u)socket.emit('join',{username:u,key:__auth.key,pw:__auth.pw});}catch(e){}});
 let timerInt = null, endTime = 0, totalDuration = 60;
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

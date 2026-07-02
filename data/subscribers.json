@@ -50,5 +50,14 @@
     "expiresAt": "2026-08-01T19:03:19.957Z",
     "active": true,
     "tiktokUsername": "hibara603"
+  },
+  "TLR-TEST04": {
+    "email": "",
+    "name": "h",
+    "paymentId": "manual",
+    "createdAt": "2026-07-02T19:17:56.573Z",
+    "expiresAt": "2026-08-01T19:17:56.573Z",
+    "active": true,
+    "tiktokUsername": "hibara603"
   }
 }

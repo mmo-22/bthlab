@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.6';
+const VERSION = '2.9.7';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1140,7 +1140,11 @@ app.get('/api/word-war/:username', requireGameAccess, (req, res) => {
   const game = getWordWarGame(key);
   const redPlayers = Array.from(game.redTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
   const bluePlayers = Array.from(game.blueTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
-  res.json({ active: game.active, category: game.category, duration: game.duration, endTime: game.endTime, redScore: game.redScore, blueScore: game.blueScore, redWords: [...game.redWords], blueWords: [...game.blueWords], redPlayers, bluePlayers, roundHistory: game.roundHistory.slice(-10) });
+  res.json({ active: game.active, category: game.category, duration: game.duration, endTime: game.endTime, redScore: game.redScore, blueScore: game.blueScore, redWords: [...game.redWords], blueWords: [...game.blueWords], redPlayers, bluePlayers, roundHistory: game.roundHistory.slice(-10),
+    // حالة التسجيل — ضرورية للأوفرلاي الذي يُفتح بعد فتح التسجيل (late joiner)
+    registrationOpen: game.registrationOpen, registrationLocked: game.registrationLocked,
+    redKeyword: game.redKeyword, blueKeyword: game.blueKeyword,
+    redCount: game.redTeam.size, blueCount: game.blueTeam.size });
 });
 
 // ══════════════════════════════════════════════════════════
