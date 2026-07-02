@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.7';
+const VERSION = '2.9.8';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -943,7 +943,7 @@ app.post('/api/wheel/stop-registration', requireGameAccess, (req, res) => { cons
 app.post('/api/wheel/remove-winner', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
 app.post('/api/wheel/remove', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); w.entries.delete(req.body.userId); io.to(`room:${key}`).emit('wheel:update', { entries: Array.from(w.entries.values()), count: w.entries.size, fullSync: true }); res.json({ ok: true }); });
 app.post('/api/wheel/spin', requireGameAccess, (req, res) => { const key = req.body.username?.toLowerCase().replace('@','').trim(); if (!key) return res.json({ ok: false }); const w = getWheel(key); if (w.entries.size < 2) return res.json({ ok: false, message: 'يحتاج مشتركين أكثر' }); const entries = Array.from(w.entries.values()); const winnerIndex = Math.floor(Math.random() * entries.length); const winner = entries[winnerIndex]; const durationMs = (req.body.duration || 5) * 1000; io.to(`room:${key}`).emit('wheel:spin', { winner, winnerIndex, duration: durationMs, speed: req.body.speed || 'normal', entries }); res.json({ ok: true, winner }); });
-app.get('/api/wheel/:username', requireGameAccess, (req, res) => { const key = req.params.username.toLowerCase().replace('@','').trim(); const w = getWheel(key); res.json({ keyword: w.keyword, entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, regEndTime: w.regEndTime || 0 }); });
+app.get('/api/wheel/:username', (req, res) => { const key = req.params.username.toLowerCase().replace('@','').trim(); const w = getWheel(key); res.json({ keyword: w.keyword, entries: Array.from(w.entries.values()), count: w.entries.size, accepting: w.accepting, regEndTime: w.regEndTime || 0 }); });
 
 // ══════════════════════════════════════════════════════════
 // ── Password Game (كلمة السر) ────────────────────────────
@@ -1002,7 +1002,7 @@ app.post('/api/password/stop', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/password/:username', requireGameAccess, (req, res) => {
+app.get('/api/password/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const pw = getPassword(key);
   res.json({ length: pw.word.length, revealed: pw.revealed, letters: pw.word.split('').map((c, i) => pw.revealed[i] ? c : '_'), active: pw.active, winner: pw.winner, hints: pw.hints });
@@ -1135,7 +1135,7 @@ app.post('/api/word-war/clear', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/word-war/:username', requireGameAccess, (req, res) => {
+app.get('/api/word-war/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const game = getWordWarGame(key);
   const redPlayers = Array.from(game.redTeam.entries()).map(([uid, p]) => ({ userId: uid, ...p })).sort((a,b) => b.words.length - a.words.length);
@@ -1240,7 +1240,7 @@ app.post('/api/knockout/stop', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/knockout/:username', requireGameAccess, (req, res) => {
+app.get('/api/knockout/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const ko = getKnockout(key);
   const players = Array.from(ko.players.values());
@@ -1356,7 +1356,7 @@ app.post('/api/guess/stop', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/guess/:username', requireGameAccess, (req, res) => {
+app.get('/api/guess/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const game = getGuessGame(key);
   const allPlayers = Array.from(game.playerStats.entries()).map(([userId, s]) => ({ userId, name: s.name, avatar: s.avatar, totalWords: s.totalWords })).sort((a,b) => b.totalWords - a.totalWords);
@@ -1411,7 +1411,7 @@ app.post('/api/quiz/stop', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/quiz/:username', requireGameAccess, (req, res) => {
+app.get('/api/quiz/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const q = getQuiz(key);
   res.json({ active: q.active, question: q.question, choices: q.choices, timer: q.timer, endTime: q.endTime || 0, totalAnswers: q.answers.size });
@@ -1463,7 +1463,7 @@ app.post('/api/poll/stop', requireGameAccess, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/poll/:username', requireGameAccess, (req, res) => {
+app.get('/api/poll/:username', (req, res) => {
   const key = req.params.username.toLowerCase().replace('@','').trim();
   const p = getPoll(key);
   const results = {};
@@ -1586,8 +1586,7 @@ io.on('connection', (socket) => {
   socket.on('join', ({ username, key: joinKey, pw: joinPw }) => {
     const key = username?.toLowerCase().replace('@', '').trim();
     if (!key) return;
-    // ── احتياطي لـ WebView (TikTok LIVE Studio): إذا handshake auth فشل،
-    //    اقبل المفتاح من حمولة الـ join نفسها (يأتي من URL params في الأوفرلاي)
+    // تسجيل هوية المالك/المشترك إذا توفرت (لمؤشر "متصل" في لوحة المالك)
     if (!socket._isOwner && joinPw && joinPw === OWNER_PASSWORD) {
       socket._isOwner = true;
     }
@@ -1596,31 +1595,19 @@ io.on('connection', (socket) => {
       if (candidate.active && new Date(candidate.expiresAt) >= new Date()) {
         socket._sub = candidate;
         socket._subKey = joinKey;
-        // سجّله كمتصل (مهم لمؤشر "متصل" في لوحة المالك)
+        if (!candidate.tiktokUsername) {
+          candidate.tiktokUsername = key;
+          saveSubscribers(subscribers);
+          console.log(`[Join] 🔗 ربط تلقائي: @${key} بمفتاح ${joinKey.slice(0,8)}..`);
+        }
         if (!onlineSubs.has(joinKey)) onlineSubs.set(joinKey, new Set());
         onlineSubs.get(joinKey).add(socket.id);
         io.to('owner').emit('subs:online', { key: joinKey, online: true, tabs: onlineSubs.get(joinKey).size });
       }
     }
-    // 🔒 تحقق: المشترك يقدر ينضم فقط لقناة اليوزرنيم المسجّل عنده، المالك يقدر ينضم لأي قناة
-    if (!socket._isOwner) {
-      if (!socket._sub) {
-        console.log(`[Join] ❌ رفض @${key}: لا اشتراك صالح (joinKey: ${joinKey ? joinKey.slice(0,8)+'..' : 'فاضي'}, cookie: ${socket._subKey ? 'موجود' : 'لا'})`);
-        return;
-      }
-      // ✅ إذا الاشتراك صالح لكن اليوزرنيم غير مربوط بعد — اربطه تلقائياً
-      // (نفس سلوك /api/connect — يحل مشكلة فتح الأوفرلاي قبل أول اتصال باللوحة)
-      if (!socket._sub.tiktokUsername) {
-        socket._sub.tiktokUsername = key;
-        saveSubscribers(subscribers);
-        console.log(`[Join] 🔗 ربط تلقائي: @${key} بمفتاح ${socket._subKey ? socket._subKey.slice(0,8)+'..' : '?'}`);
-      }
-      if (String(socket._sub.tiktokUsername).toLowerCase().trim() !== key) {
-        console.log(`[Join] ❌ رفض @${key}: الاشتراك مربوط بـ @${socket._sub.tiktokUsername}`);
-        return;
-      }
-    }
-    console.log(`[Join] ✅ @${key} انضم (${socket._isOwner ? 'مالك' : 'مشترك'})`);
+    // ✅ الانضمام مفتوح للجميع (قراءة فقط) — الأوفرلاي محتوى معروض على البث للعامة أصلاً
+    // مثل transparent-test.html: صفر شروط، صفر رفض صامت. الحماية على أوامر التحكم (POST) فقط.
+    console.log(`[Join] ✅ @${key} انضم (${socket._isOwner ? 'مالك' : socket._sub ? 'مشترك' : 'مشاهد'})`);
     socket.rooms.forEach(room => { if (room.startsWith('room:') && room !== `room:${key}`) socket.leave(room); });
     socket.join(`room:${key}`);
     const room = rooms[key];
