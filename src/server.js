@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.9';
+const VERSION = '2.9.10';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -560,8 +560,12 @@ function extractUser(data) {
   const uniqueId = data.uniqueId || u.uniqueId || '';
   const nickname = data.nickname || u.nickname || uniqueId || 'مشاهد';
   const avatar = data.profilePictureUrl
+    || u.profilePictureUrl || u.avatarUrl
+    || (typeof u.avatar === 'string' ? u.avatar : pickUrl(u.avatar))
     || pickUrl(u.profilePicture) || pickUrl(u.avatarThumb)
+    || pickUrl(u.avatarMedium) || pickUrl(u.avatarLarger)
     || pickUrl(data.profilePicture) || pickUrl(data.avatarThumb)
+    || pickUrl(data.avatarMedium) || pickUrl(data.avatarLarger)
     || null;
   const isModerator = (data.isModerator !== undefined) ? data.isModerator : (u.isModerator || false);
   const isSubscriber = (data.isSubscriber !== undefined) ? data.isSubscriber : (u.isSubscriber || false);
@@ -836,8 +840,33 @@ async function connectRoom(username, sessionid = null) {
   });
 
   tiktok.on('member', (data) => { const usr = extractUser(data); const msg = { type:'member', user: usr.nickname, avatar: usr.avatar, actionId: data.actionId, ts: Date.now() }; if (data.actionId === 1) storeMsg(key, msg); broadcast(key, 'member', msg); });
-  tiktok.on('follow', (data) => { const usr = extractUser(data); const uid = usr.userId; if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); } broadcast(key, 'follow', { type:'follow', user: usr.nickname, avatar: usr.avatar, ts: Date.now() }); });
-  tiktok.on('share', (data) => { const usr = extractUser(data); room.stats.shares = (room.stats.shares || 0) + 1; broadcast(key, 'share', { type:'share', user: usr.nickname, ts: Date.now() }); broadcast(key, 'stats', room.stats); });
+  // ── مصنّف موحّد للأحداث الاجتماعية (share/follow) ──
+  // tik.tools أحياناً يرسل الشير بحدث خاطئ — نصنّف حسب displayType/label الفعلي
+  function handleSocial(evtName, data) {
+    const usr = extractUser(data);
+    const disp = String(data.displayType || data.label || '').toLowerCase();
+    let kind = disp.includes('share') ? 'share' : disp.includes('follow') ? 'follow' : evtName;
+    if (!kind) return; // حدث social غير معروف — تجاهل
+    // منع التكرار (نفس المستخدم + نفس النوع خلال 1.5 ثانية = حدث مكرر من المكتبة)
+    const now = Date.now();
+    room._socialSeen = room._socialSeen || new Map();
+    const dk = kind + ':' + (usr.userId || usr.nickname);
+    if (room._socialSeen.get(dk) && now - room._socialSeen.get(dk) < 1500) return;
+    room._socialSeen.set(dk, now);
+    if (room._socialSeen.size > 500) room._socialSeen.clear();
+    if (kind === 'share') {
+      room.stats.shares = (room.stats.shares || 0) + 1;
+      broadcast(key, 'share', { type:'share', user: usr.nickname, ts: now });
+      broadcast(key, 'stats', room.stats);
+    } else if (kind === 'follow') {
+      const uid = usr.userId;
+      if (uid && !room.followerSet.has(uid)) { room.followerSet.add(uid); room.stats.followers = room.followerSet.size; broadcast(key, 'stats', room.stats); }
+      broadcast(key, 'follow', { type:'follow', user: usr.nickname, avatar: usr.avatar, ts: now });
+    }
+  }
+  tiktok.on('follow', (data) => handleSocial('follow', data));
+  tiktok.on('share', (data) => handleSocial('share', data));
+  tiktok.on('social', (data) => handleSocial('', data));
   tiktok.on('roomUser', (data) => { room.stats.viewers = data.viewerCount || room.stats.viewers; broadcast(key, 'viewers', { count: data.viewerCount }); broadcast(key, 'stats', room.stats); });
   tiktok.on('streamEnd', () => {
     // البث انتهى رسمياً من المستخدم — توقف نظيف، بدون محاولات
