@@ -2643,33 +2643,7 @@ init();
 
 
 
-// ══════ 📺 وضع الشاشة الذكية ══════
-// افتح: room.html?code=XXXX&display=1 → عرض فقط بدون تفاعل، مكبّر للتلفزيونات
-(function(){
-  var p = new URLSearchParams(location.search);
-  if (p.get('display') !== '1') return;
-  var code = (p.get('code')||'').toUpperCase();
-  if (!code) return;
-  document.body.classList.add('display-mode');
-  // انضمام كشاشة عرض عند جاهزية socket
-  var t = setInterval(function(){
-    if (typeof socket === 'undefined' || !socket.connected){ return; }
-    clearInterval(t);
-    ROOM_CODE = code;
-    socket.emit('room:display', { code: code });
-  }, 150);
-  socket.on('room:joined', function(data){
-    if (!data.display) return;
-    document.getElementById('join-modal') && (document.getElementById('join-modal').style.display = 'none');
-    document.getElementById('room-view') && (document.getElementById('room-view').style.display = '');
-    // عرض الحالات النشطة
-    if (data.castle){ castleShow(true); castleRender(data.castle);
-      var ph = document.getElementById('castle-phase');
-      if (data.castle.phase==='register') ph.textContent='📝 اكتب 1 للأحمر أو 2 للأزرق في الشات';
-      else if (data.castle.phase==='battle') ph.textContent='⚔️ المعركة! كل رسالة = هجوم'; }
-    if (data.draw){ drawShow(true); document.getElementById('draw-hint-v').textContent = data.draw.hint ? '💡 '+data.draw.hint : ''; }
-  });
-})();
+
 
 
 
@@ -2895,7 +2869,6 @@ function openDisplayScreen(){
   if (!code) return;
   window.DISPLAY_MODE = true;
   document.body.classList.add('display-mode');
-  ROOM_CODE = code;
   myName = '📺';
   document.getElementById('join-screen').classList.add('hidden');
   // شريط الكود + QR للانضمام السريع

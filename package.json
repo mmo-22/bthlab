@@ -1,6 +1,6 @@
 {
   "name": "bthlab",
-  "version": "2.12.1",
+  "version": "2.12.2",
   "description": "BthLab — مختبر البث",
   "main": "src/server.js",
   "scripts": {
