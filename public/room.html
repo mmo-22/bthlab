@@ -1480,6 +1480,7 @@ body.activities-hidden .activity-display { display: none !important; }
         <div class="btn-row">
           <button class="btn-sm btn-success" onclick="openWheel()">✅ فتح التسجيل</button>
           <button class="btn-sm btn-warn" onclick="closeWheel()">🔒 إغلاق التسجيل</button>
+          <button class="btn-sm" onclick="socket.emit('room:wheel-hide',{code:ROOM_CODE})">🙈 إخفاء العجلة</button>
           <button class="btn-sm btn-primary" onclick="spinWheel()">🎡 دوير</button>
           <button class="btn-sm btn-danger" onclick="clearWheel()">🗑️ مسح</button>
         </div>
@@ -1876,9 +1877,12 @@ function enterRoom(name, isHost) {
 // ── Socket ────────────────────────────────────────────────
 function connectSocket(isHost) {
   socket = io();
+  bthBindExtras();
 
   socket.on('connect', () => {
-    if (isHost) {
+    if (window.DISPLAY_MODE) {
+      socket.emit('room:display', { code: ROOM_CODE });
+    } else if (isHost) {
       socket.emit('room:host', { code: ROOM_CODE, hostName: myName });
     } else {
       socket.emit('room:join', { code: ROOM_CODE, name: myName });
@@ -2637,115 +2641,7 @@ function submitKoAnswer(n) {
 
 init();
 
-// ══════ 🏰 حرب القلاع (غرف) ══════
-var castleMaxHP = 100;
-function castleShow(on){ document.getElementById('castle-display').classList.toggle('show', !!on); }
-function castleRender(d){
-  if (d.maxHP) castleMaxHP = d.maxHP;
-  if (typeof d.redHP === 'number'){ document.getElementById('c-red-hp').textContent = d.redHP; document.getElementById('c-red-fill').style.width = Math.max(0, d.redHP/castleMaxHP*100) + '%'; }
-  if (typeof d.blueHP === 'number'){ document.getElementById('c-blue-hp').textContent = d.blueHP; document.getElementById('c-blue-fill').style.width = Math.max(0, d.blueHP/castleMaxHP*100) + '%'; }
-  if (typeof d.redCount === 'number') document.getElementById('c-red-count').textContent = d.redCount;
-  if (typeof d.blueCount === 'number') document.getElementById('c-blue-count').textContent = d.blueCount;
-  if (typeof d.redAttacks === 'number') document.getElementById('c-red-atk').textContent = d.redAttacks;
-  if (typeof d.blueAttacks === 'number') document.getElementById('c-blue-atk').textContent = d.blueAttacks;
-}
-socket.on('room:castle', function(d){
-  if (d.phase === 'idle'){ castleShow(false); return; }
-  castleShow(true);
-  var ph = document.getElementById('castle-phase');
-  if (d.phase === 'register') ph.textContent = '📝 اكتب 1 للأحمر أو 2 للأزرق في الشات';
-  else if (d.phase === 'locked') ph.textContent = '🔒 التسجيل مقفل — ' + (d.total||0) + ' لاعب';
-  else if (d.phase === 'battle') ph.textContent = '⚔️ المعركة! كل رسالة في الشات = هجوم';
-  castleRender(d);
-});
-socket.on('room:castle-joined', function(d){ castleShow(true); castleRender(d); });
-socket.on('room:castle-attack', function(d){
-  castleRender(d);
-  var f = document.getElementById('castle-feed');
-  f.textContent = (d.team === 'red' ? '🔴 ' : '🔵 ') + d.attacker + ' ⚔️';
-});
-socket.on('room:castle-finish', function(d){
-  castleRender(d);
-  document.getElementById('castle-phase').textContent = '🏆 ' + (d.winner === 'red' ? '🔴 الأحمر' : '🔵 الأزرق') + ' فاز!';
-});
 
-// ══════ 🖼️ ما هذا الرسم (غرف) ══════
-var vCanvas = document.getElementById('viewer-canvas');
-var vCtx = vCanvas.getContext('2d');
-vCtx.lineCap = 'round'; vCtx.lineJoin = 'round';
-vCtx.fillStyle = '#fff'; vCtx.fillRect(0,0,vCanvas.width,vCanvas.height);
-var drawTimerInt = null;
-function drawShow(on){ document.getElementById('draw-display').classList.toggle('show', !!on); }
-function drawResetCanvas(c){ c.fillStyle='#fff'; c.fillRect(0,0,800,500); c.beginPath(); }
-socket.on('room:draw-start', function(d){
-  drawShow(true);
-  drawResetCanvas(vCtx);
-  document.getElementById('draw-hint-v').textContent = d.hint ? '💡 ' + d.hint : '';
-  document.getElementById('draw-winners-v').innerHTML = '';
-  document.getElementById('draw-result-v').textContent = '';
-  if (drawTimerInt) clearInterval(drawTimerInt);
-  var end = Date.now() + (d.answerTime||60)*1000;
-  drawTimerInt = setInterval(function(){
-    var rem = Math.max(0, Math.ceil((end - Date.now())/1000));
-    document.getElementById('draw-timer-v').textContent = rem + 's';
-    if (rem <= 0){ clearInterval(drawTimerInt); drawTimerInt = null; }
-  }, 250);
-});
-socket.on('room:draw-stroke', function(d){
-  vCtx.strokeStyle = d.color || '#000'; vCtx.lineWidth = d.size || 4;
-  if (d.new){ vCtx.beginPath(); vCtx.moveTo(d.x, d.y); } else { vCtx.lineTo(d.x, d.y); vCtx.stroke(); }
-});
-socket.on('room:draw-clear', function(){ drawResetCanvas(vCtx); });
-socket.on('room:draw-correct', function(d){
-  var RK = ['🥇','🥈','🥉'];
-  var el = document.getElementById('draw-winners-v');
-  var s = document.createElement('span');
-  s.style.cssText = 'padding:2px 8px;background:rgba(29,186,114,.15);border-radius:6px;font-size:11px;font-weight:700;color:#1dba72';
-  s.textContent = (RK[d.rank-1]||d.rank) + ' ' + d.player;
-  el.appendChild(s);
-});
-socket.on('room:draw-end', function(d){
-  if (drawTimerInt){ clearInterval(drawTimerInt); drawTimerInt = null; }
-  document.getElementById('draw-timer-v').textContent = '⏹';
-  document.getElementById('draw-result-v').textContent = '✅ الكلمة: ' + (d.word || '?');
-});
-
-// ── رسم المضيف على host-canvas ──
-function drawStartRoom(){
-  var w = document.getElementById('draw-word').value.trim();
-  if (!w){ alert('اكتب الكلمة السرية'); return; }
-  drawClearRoom();
-  socket.emit('room:draw-start', { code: ROOM_CODE, word: w, hint: document.getElementById('draw-hint').value.trim(), answerTime: parseInt(document.getElementById('draw-time').value)||90 });
-}
-function drawClearRoom(){
-  var hc = document.getElementById('host-canvas');
-  if (hc){ var c = hc.getContext('2d'); drawResetCanvas(c); }
-  drawResetCanvas(vCtx);
-  socket.emit('room:draw-clear', { code: ROOM_CODE });
-}
-(function(){
-  var hc = document.getElementById('host-canvas');
-  if (!hc) return;
-  var c = hc.getContext('2d');
-  c.lineCap='round'; c.lineJoin='round'; c.fillStyle='#fff'; c.fillRect(0,0,800,500);
-  var drawing = false;
-  function pos(e){
-    var r = hc.getBoundingClientRect();
-    var t = e.touches ? e.touches[0] : e;
-    return { x: (t.clientX - r.left) * (800 / r.width), y: (t.clientY - r.top) * (500 / r.height) };
-  }
-  function strokeTo(p, isNew){
-    var col = document.getElementById('draw-color').value, sz = parseInt(document.getElementById('draw-size').value)||5;
-    c.strokeStyle = col; c.lineWidth = sz;
-    if (isNew){ c.beginPath(); c.moveTo(p.x, p.y); } else { c.lineTo(p.x, p.y); c.stroke(); }
-    socket.emit('room:draw-stroke', { code: ROOM_CODE, x: p.x, y: p.y, color: col, size: sz, new: isNew });
-  }
-  function start(e){ drawing = true; strokeTo(pos(e), true); e.preventDefault(); }
-  function move(e){ if (drawing){ strokeTo(pos(e), false); e.preventDefault(); } }
-  function end(){ drawing = false; }
-  hc.addEventListener('mousedown', start); hc.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
-  hc.addEventListener('touchstart', start, {passive:false}); hc.addEventListener('touchmove', move, {passive:false}); hc.addEventListener('touchend', end);
-})();
 
 // ══════ 📺 وضع الشاشة الذكية ══════
 // افتح: room.html?code=XXXX&display=1 → عرض فقط بدون تفاعل، مكبّر للتلفزيونات
@@ -2776,12 +2672,14 @@ function drawClearRoom(){
 })();
 
 
-function openDisplayScreen(){
-  var link = location.origin + '/room.html?code=' + ROOM_CODE + '&display=1';
-  navigator.clipboard && navigator.clipboard.writeText(link).catch(function(){});
-  window.open(link, '_blank');
-  alert('📺 رابط شاشة العرض نُسخ — افتحه على التلفزيون أو أي شاشة:\n' + link);
-}
+
+
+
+
+
+
+
+
 
 // ═══ 🎲 دوال البنوك ═══
 var _koUsed = new Set(), _guessUsed = new Set();
@@ -2840,39 +2738,180 @@ function pwFromBank(){
 }
 function drawFromBank(){
   if (!window.BANK_WORDS) return;
-  var pool = BANK_WORDS.filter(function(w){ return ['حيوانات','فواكه','خضار','أشياء','طعام'].indexOf(w.c) >= 0 || w.w.length <= 8; });
+  var pool = BANK_WORDS.filter(function(w){ return ['حيوانات','فواكه','خضار'].indexOf(w.c) >= 0 || (w.w.length <= 8 && w.w.indexOf(' ') < 0); });
   var w = pool[Math.floor(Math.random()*pool.length)] || BANK_WORDS[0];
   document.getElementById('draw-word').value = w.w;
   document.getElementById('draw-hint').value = w.h || '';
 }
 _fillGuessCats(); _fillWwCats();
 
-// ═══ 🙈 إخفاء الفعالية عن المشاهدين ═══
-var activityHidden = false;
+// ═══ 🏰🖼️🙈 معالجات القلاع والرسم والإخفاء — تُربط بعد إنشاء socket ═══
+var castleMaxHP = 100, drawTimerInt = null, activityHidden = false;
+var vCanvas = document.getElementById('viewer-canvas');
+var vCtx = vCanvas ? vCanvas.getContext('2d') : null;
+if (vCtx){ vCtx.lineCap='round'; vCtx.lineJoin='round'; vCtx.fillStyle='#fff'; vCtx.fillRect(0,0,800,500); }
+function drawResetCanvas(c){ if(!c)return; c.fillStyle='#fff'; c.fillRect(0,0,800,500); c.beginPath(); }
+function castleShow(on){ var e=document.getElementById('castle-display'); if(e) e.classList.toggle('show', !!on); }
+function drawShow(on){ var e=document.getElementById('draw-display'); if(e) e.classList.toggle('show', !!on); }
+function castleRender(d){
+  if (d.maxHP) castleMaxHP = d.maxHP;
+  if (typeof d.redHP === 'number'){ document.getElementById('c-red-hp').textContent = d.redHP; document.getElementById('c-red-fill').style.width = Math.max(0, d.redHP/castleMaxHP*100) + '%'; }
+  if (typeof d.blueHP === 'number'){ document.getElementById('c-blue-hp').textContent = d.blueHP; document.getElementById('c-blue-fill').style.width = Math.max(0, d.blueHP/castleMaxHP*100) + '%'; }
+  if (typeof d.redCount === 'number') document.getElementById('c-red-count').textContent = d.redCount;
+  if (typeof d.blueCount === 'number') document.getElementById('c-blue-count').textContent = d.blueCount;
+  if (typeof d.redAttacks === 'number') document.getElementById('c-red-atk').textContent = d.redAttacks;
+  if (typeof d.blueAttacks === 'number') document.getElementById('c-blue-atk').textContent = d.blueAttacks;
+}
+
+function bthBindExtras(){
+  if (!socket || socket._bthExtras) return;
+  socket._bthExtras = true;
+
+  socket.on('room:wheel-hide', function(){ var e=document.getElementById('wheel-display'); if(e) e.classList.remove('show'); });
+  socket.on('room:castle', function(d){
+    if (d.phase === 'idle'){ castleShow(false); return; }
+    castleShow(true);
+    var ph = document.getElementById('castle-phase');
+    if (d.phase === 'register') ph.textContent = '📝 اكتب 1 للأحمر أو 2 للأزرق في الشات';
+    else if (d.phase === 'locked') ph.textContent = '🔒 التسجيل مقفل — ' + (d.total||0) + ' لاعب';
+    else if (d.phase === 'battle') ph.textContent = '⚔️ المعركة! كل رسالة في الشات = هجوم';
+    castleRender(d);
+  });
+  socket.on('room:castle-joined', function(d){ castleShow(true); castleRender(d); });
+  socket.on('room:castle-attack', function(d){
+    castleRender(d);
+    document.getElementById('castle-feed').textContent = (d.team === 'red' ? '🔴 ' : '🔵 ') + d.attacker + ' ⚔️';
+  });
+  socket.on('room:castle-finish', function(d){
+    castleRender(d);
+    document.getElementById('castle-phase').textContent = '🏆 ' + (d.winner === 'red' ? '🔴 الأحمر' : '🔵 الأزرق') + ' فاز!';
+  });
+
+  socket.on('room:draw-start', function(d){
+    drawShow(true);
+    drawResetCanvas(vCtx);
+    document.getElementById('draw-hint-v').textContent = d.hint ? '💡 ' + d.hint : '';
+    document.getElementById('draw-winners-v').innerHTML = '';
+    document.getElementById('draw-result-v').textContent = '';
+    if (drawTimerInt) clearInterval(drawTimerInt);
+    var end = Date.now() + (d.answerTime||60)*1000;
+    drawTimerInt = setInterval(function(){
+      var rem = Math.max(0, Math.ceil((end - Date.now())/1000));
+      document.getElementById('draw-timer-v').textContent = rem + 's';
+      if (rem <= 0){ clearInterval(drawTimerInt); drawTimerInt = null; }
+    }, 250);
+  });
+  socket.on('room:draw-stroke', function(d){
+    if (!vCtx) return;
+    vCtx.strokeStyle = d.color || '#000'; vCtx.lineWidth = d.size || 4;
+    if (d.new){ vCtx.beginPath(); vCtx.moveTo(d.x, d.y); } else { vCtx.lineTo(d.x, d.y); vCtx.stroke(); }
+  });
+  socket.on('room:draw-clear', function(){ drawResetCanvas(vCtx); });
+  socket.on('room:draw-correct', function(d){
+    var RK = ['🥇','🥈','🥉'];
+    var el = document.getElementById('draw-winners-v');
+    var s = document.createElement('span');
+    s.style.cssText = 'padding:2px 8px;background:rgba(29,186,114,.15);border-radius:6px;font-size:11px;font-weight:700;color:#1dba72';
+    s.textContent = (RK[d.rank-1]||d.rank) + ' ' + d.player;
+    el.appendChild(s);
+  });
+  socket.on('room:draw-end', function(d){
+    if (drawTimerInt){ clearInterval(drawTimerInt); drawTimerInt = null; }
+    document.getElementById('draw-timer-v').textContent = '⏹';
+    document.getElementById('draw-result-v').textContent = '✅ الكلمة: ' + (d.word || '?');
+  });
+
+  // الإخفاء: يطبق على المشاهدين وشاشة العرض (المضيف مستثنى)
+  socket.on('room:activity-visible', function(d){
+    if (IS_HOST && !window.DISPLAY_MODE) return;
+    document.body.classList.toggle('activities-hidden', !d.visible);
+  });
+  socket.on('room:joined', function(data){
+    if (data.activityHidden && (!IS_HOST || window.DISPLAY_MODE)) document.body.classList.add('activities-hidden');
+    if (window.DISPLAY_MODE){
+      if (data.castle){ castleShow(true); castleRender(data.castle); }
+      if (data.draw){ drawShow(true); document.getElementById('draw-hint-v').textContent = data.draw.hint ? '💡 '+data.draw.hint : ''; }
+    }
+  });
+}
+
+// ═══ رسم المضيف على host-canvas ═══
+function drawStartRoom(){
+  var w = document.getElementById('draw-word').value.trim();
+  if (!w){ alert('اكتب الكلمة السرية'); return; }
+  drawClearRoom();
+  socket.emit('room:draw-start', { code: ROOM_CODE, word: w, hint: document.getElementById('draw-hint').value.trim(), answerTime: parseInt(document.getElementById('draw-time').value)||90 });
+}
+function drawClearRoom(){
+  var hc = document.getElementById('host-canvas');
+  if (hc) drawResetCanvas(hc.getContext('2d'));
+  drawResetCanvas(vCtx);
+  if (socket) socket.emit('room:draw-clear', { code: ROOM_CODE });
+}
+(function(){
+  var hc = document.getElementById('host-canvas');
+  if (!hc) return;
+  var c = hc.getContext('2d');
+  c.lineCap='round'; c.lineJoin='round'; c.fillStyle='#fff'; c.fillRect(0,0,800,500);
+  var drawing = false;
+  function pos(e){
+    var r = hc.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) * (800 / r.width), y: (t.clientY - r.top) * (500 / r.height) };
+  }
+  function strokeTo(p, isNew){
+    var col = document.getElementById('draw-color').value, sz = parseInt(document.getElementById('draw-size').value)||5;
+    c.strokeStyle = col; c.lineWidth = sz;
+    if (isNew){ c.beginPath(); c.moveTo(p.x, p.y); } else { c.lineTo(p.x, p.y); c.stroke(); }
+    if (socket) socket.emit('room:draw-stroke', { code: ROOM_CODE, x: p.x, y: p.y, color: col, size: sz, new: isNew });
+  }
+  function start(e){ drawing = true; strokeTo(pos(e), true); e.preventDefault(); }
+  function move(e){ if (drawing){ strokeTo(pos(e), false); e.preventDefault(); } }
+  function end(){ drawing = false; }
+  hc.addEventListener('mousedown', start); hc.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+  hc.addEventListener('touchstart', start, {passive:false}); hc.addEventListener('touchmove', move, {passive:false}); hc.addEventListener('touchend', end);
+})();
+
+// ═══ 🙈 زر الإخفاء ═══
 function toggleActivityVisible(){
+  if (!socket) return;
   activityHidden = !activityHidden;
   socket.emit('room:activity-visible', { code: ROOM_CODE, visible: !activityHidden });
   var b = document.getElementById('hide-activity-btn');
   b.textContent = activityHidden ? '👁 إظهار الفعالية' : '🙈 إخفاء الفعالية';
   b.style.background = activityHidden ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
 }
-socket.on('room:activity-visible', function(d){
-  // المضيف يظل يشوف كل شي — الإخفاء للمشاهدين وشاشة العرض فقط
+
+// ═══ 📺 وضع الشاشة الذكية + QR ═══
+function openDisplayScreen(){
+  var link = location.origin + '/room.html?code=' + ROOM_CODE + '&display=1';
+  if (navigator.clipboard) navigator.clipboard.writeText(link).catch(function(){});
+  window.open(link, '_blank');
+}
+(function(){
   var p = new URLSearchParams(location.search);
-  var isDisp = p.get('display') === '1';
-  if (typeof IS_HOST !== 'undefined' && IS_HOST && !isDisp) return;
-  document.body.classList.toggle('activities-hidden', !d.visible);
-});
+  if (p.get('display') !== '1') return;
+  var code = (p.get('code')||'').toUpperCase();
+  if (!code) return;
+  window.DISPLAY_MODE = true;
+  document.body.classList.add('display-mode');
+  ROOM_CODE = code;
+  myName = '📺';
+  document.getElementById('join-screen').classList.add('hidden');
+  // شريط الكود + QR للانضمام السريع
+  var joinLink = location.origin + '/room.html?code=' + code;
+  var qr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=' + encodeURIComponent(joinLink);
+  var bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;top:14px;left:14px;z-index:9999;background:rgba(13,13,20,.92);border:1.5px solid rgba(168,85,247,.4);border-radius:16px;padding:12px 16px;display:flex;align-items:center;gap:14px';
+  bar.innerHTML = '<img src="'+qr+'" style="width:110px;height:110px;border-radius:10px;background:#fff;padding:4px" alt="QR">' +
+    '<div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px">امسح للانضمام أو ادخل الكود:</div>' +
+    '<div style="font-size:30px;font-weight:900;color:#a855f7;letter-spacing:3px;font-family:monospace">'+code+'</div>' +
+    '<div style="font-size:11px;color:rgba(255,255,255,.35);direction:ltr;text-align:left">'+location.host+'/room.html</div></div>';
+  document.body.appendChild(bar);
+  // الاتصال كشاشة عرض — نفس مسار المشاهد (كل معالجات الألعاب) لكن ينضم كـ display
+  connectSocket(false);
+})();
 
-
-// تطبيق حالة الإخفاء عند الانضمام
-socket.on('room:joined', function(data){
-  if (data.activityHidden){
-    var p = new URLSearchParams(location.search);
-    var isDisp = p.get('display') === '1';
-    if (!(typeof IS_HOST !== 'undefined' && IS_HOST) || isDisp) document.body.classList.add('activities-hidden');
-  }
-});
 </script>
 </body>
 </html>

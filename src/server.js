@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.12.0';
+const VERSION = '2.12.1';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -2218,6 +2218,7 @@ io.on('connection', (socket) => {
   });
   socket.on('room:wheel-keyword', ({ code, keyword }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.keyword=keyword||'اشتراك'; io.to(`liveroom:${lr.code}`).emit('room:wheel-keyword',{keyword:lr.wheel.keyword}); }});
   socket.on('room:wheel-open', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=true; io.to(`liveroom:${lr.code}`).emit('room:wheel-open',{keyword:lr.wheel.keyword,count:lr.wheel.entries.size}); }});
+  socket.on('room:wheel-hide', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) io.to(`liveroom:${lr.code}`).emit('room:wheel-hide',{}); });
   socket.on('room:wheel-close', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=false; io.to(`liveroom:${lr.code}`).emit('room:wheel-close',{}); }});
   socket.on('room:wheel-clear', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.entries.clear(); io.to(`liveroom:${lr.code}`).emit('room:wheel-update',{entries:[],count:0,fullSync:true}); }});
   socket.on('room:wheel-spin', ({ code, duration }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(!lr||!socket._isHost) return; const w=lr.wheel; if(w.entries.size<2) return socket.emit('room:error',{message:'يحتاج مشتركين أكثر'}); const entries=Array.from(w.entries.values()); const wi=Math.floor(Math.random()*entries.length); io.to(`liveroom:${lr.code}`).emit('room:wheel-spin',{winner:entries[wi],winnerIndex:wi,entries,duration:(duration||5)*1000}); });
