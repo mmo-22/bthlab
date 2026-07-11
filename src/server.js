@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.11.0';
+const VERSION = '2.12.0';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -1973,7 +1973,7 @@ io.on('connection', (socket) => {
     socket._liveRoomCode = lroom.code;
     socket._liveRoomName = viewerName;
     socket.emit('room:joined', {
-      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size,
+      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size, activityHidden: !!lroom.activityHidden,
       chatHistory: lroom.chat.slice(-30),
       poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
       wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
@@ -2060,7 +2060,7 @@ io.on('connection', (socket) => {
     socket._liveRoomCode = lroom.code;
     socket._isDisplay = true;
     socket.emit('room:joined', {
-      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size, display: true,
+      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size, display: true, activityHidden: !!lroom.activityHidden,
       chatHistory: lroom.chat.slice(-30),
       poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
       wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
@@ -2070,6 +2070,13 @@ io.on('connection', (socket) => {
       castle: lroom.castle.phase !== 'idle' ? { phase: lroom.castle.phase, maxHP: lroom.castle.maxHP, redHP: lroom.castle.redHP, blueHP: lroom.castle.blueHP, redCount: [...lroom.castle.teams.values()].filter(t=>t==='red').length, blueCount: [...lroom.castle.teams.values()].filter(t=>t==='blue').length, redAttacks: lroom.castle.redAttacks, blueAttacks: lroom.castle.blueAttacks } : null,
       draw: lroom.draw.active ? { hint: lroom.draw.hint, answerTime: lroom.draw.answerTime, winners: lroom.draw.winners.map(w=>({name:w.name})) } : null,
     });
+  });
+
+  // ── 🙈 إخفاء/إظهار الفعالية عن المشاهدين (المضيف فقط) ──
+  socket.on('room:activity-visible', ({ code, visible }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    lroom.activityHidden = !visible;
+    io.to(`liveroom:${lroom.code}`).emit('room:activity-visible', { visible: !!visible });
   });
 
   socket.on('room:chat', ({ code, message }) => {
