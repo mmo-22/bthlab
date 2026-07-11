@@ -492,6 +492,13 @@
   .join-err { color: var(--danger); font-size: 0.85rem; margin-top: 10px; }
 
   .label-sm { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; display: block; }
+
+/* 📺 وضع الشاشة الذكية */
+body.display-mode .chat-input-row, body.display-mode #chat-input, body.display-mode .send-btn,
+body.display-mode .poll-option, body.display-mode button:not(.tab-mini) { pointer-events: none; }
+body.display-mode .header-left button, body.display-mode #chat-form { display: none !important; }
+body.display-mode { zoom: 1.35; }
+body.display-mode .activity-display { font-size: 1.1em; }
 </style>
 </head>
 <body>
@@ -525,6 +532,7 @@
   <div style="display:flex;gap:12px;align-items:center">
     <div class="viewer-count"><div class="online-dot"></div><span id="viewer-count-display">0 مشاهد</span></div>
     <button class="btn-share" onclick="shareRoom()">🔗 مشاركة</button>
+    <button class="btn-share" onclick="openDisplayScreen()" title="افتحه على التلفزيون/الشاشة الذكية">📺 شاشة عرض</button>
     <button class="btn-share" id="btn-close-room" onclick="closeRoom()" style="display:none;color:var(--danger)">✕ إغلاق</button>
   </div>
 </div>
@@ -546,6 +554,8 @@
         <button class="tab-mini" onclick="switchCtrl('password')">🔐 كلمة السر</button>
         <button class="tab-mini" onclick="switchCtrl('wordwar')">⚔️ حرب الكلمات</button>
         <button class="tab-mini" onclick="switchCtrl('knockout')">🏆 خروج</button>
+        <button class="tab-mini" onclick="switchCtrl('castle')">🏰 قلاع</button>
+        <button class="tab-mini" onclick="switchCtrl('draw')">🖼️ رسم</button>
         <button class="tab-mini" onclick="switchCtrl('viewers')">👥 مشاهدون</button>
       </div>
 
@@ -603,6 +613,40 @@
       </div>
 
       <!-- Viewers ctrl -->
+      <div class="ctrl-panel" id="ctrl-castle">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <span class="label-sm" style="margin:0">صحة القلعة:</span>
+          <input class="ctrl" id="castle-hp" type="number" value="100" min="20" max="500" style="width:90px;margin:0">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sm btn-success" onclick="socket.emit('room:castle-register',{code:ROOM_CODE,maxHP:parseInt(document.getElementById('castle-hp').value)||100})">📝 فتح التسجيل</button>
+          <button class="btn-sm btn-warn" onclick="socket.emit('room:castle-lock',{code:ROOM_CODE})">🔒 قفل</button>
+          <button class="btn-sm btn-danger" onclick="socket.emit('room:castle-battle',{code:ROOM_CODE})">⚔️ ابدأ المعركة</button>
+          <button class="btn-sm" onclick="socket.emit('room:castle-stop',{code:ROOM_CODE})">⏹</button>
+        </div>
+        <div class="label-sm" style="margin-top:6px">المشاهدون يكتبون <b>1</b> للأحمر أو <b>2</b> للأزرق في الشات، وأثناء المعركة كل رسالة = هجوم</div>
+      </div>
+
+      <div class="ctrl-panel" id="ctrl-draw">
+        <input class="ctrl" id="draw-word" placeholder="الكلمة السرية (ما يشوفها المشاهدون)" maxlength="30">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="ctrl" id="draw-hint" placeholder="تلميح (اختياري)" style="margin:0;flex:1">
+          <input class="ctrl" id="draw-time" type="number" value="90" min="10" max="600" style="width:80px;margin:0" title="ثواني">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sm btn-success" onclick="drawStartRoom()">▶ ابدأ الجولة</button>
+          <button class="btn-sm btn-danger" onclick="socket.emit('room:draw-stop',{code:ROOM_CODE})">⏹ إنهاء</button>
+          <button class="btn-sm btn-warn" onclick="drawClearRoom()">🧹 مسح اللوحة</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin:8px 0">
+          <span class="label-sm" style="margin:0">🎨</span>
+          <input type="color" id="draw-color" value="#111111" style="width:36px;height:30px;border:none;background:none;cursor:pointer">
+          <input type="range" id="draw-size" min="2" max="20" value="5" style="flex:1">
+        </div>
+        <canvas id="host-canvas" width="800" height="500" style="width:100%;background:#fff;border-radius:10px;touch-action:none;cursor:crosshair"></canvas>
+        <div class="label-sm" style="margin-top:4px">ارسم هنا — يظهر لحظياً عند المشاهدين وشاشة العرض</div>
+      </div>
+
       <div class="ctrl-panel" id="ctrl-viewers">
         <div id="viewers-list-host" class="viewers-chips"></div>
         <div id="no-viewers-msg" style="color:var(--muted);font-size:0.9rem;margin-top:8px">لا يوجد مشاهدون بعد</div>
@@ -777,6 +821,37 @@
     </div>
 
     <!-- PASSWORD DISPLAY -->
+    <div class="card activity-display" id="castle-display">
+      <div style="text-align:center;font-weight:900;color:#a855f7;margin-bottom:6px">🏰 حرب القلاع</div>
+      <div id="castle-phase" style="text-align:center;color:#fbbf24;font-size:13px;font-weight:700;margin-bottom:8px"></div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1;background:rgba(239,68,68,.08);border:2px solid rgba(239,68,68,.3);border-radius:12px;padding:10px;text-align:center">
+          <div style="color:#ef4444;font-weight:700;font-size:13px">🔴 الأحمر (<span id="c-red-count">0</span>)</div>
+          <div style="height:12px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;margin:6px 0"><div id="c-red-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#dc2626,#ef4444);transition:width .3s"></div></div>
+          <div id="c-red-hp" style="font-size:18px;font-weight:900;color:#fff">100</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35)">⚔️ <span id="c-red-atk">0</span></div>
+        </div>
+        <div style="flex:1;background:rgba(59,130,246,.08);border:2px solid rgba(59,130,246,.3);border-radius:12px;padding:10px;text-align:center">
+          <div style="color:#3b82f6;font-weight:700;font-size:13px">🔵 الأزرق (<span id="c-blue-count">0</span>)</div>
+          <div style="height:12px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;margin:6px 0"><div id="c-blue-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#2563eb,#3b82f6);transition:width .3s"></div></div>
+          <div id="c-blue-hp" style="font-size:18px;font-weight:900;color:#fff">100</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35)">⚔️ <span id="c-blue-atk">0</span></div>
+        </div>
+      </div>
+      <div id="castle-feed" style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-align:center;min-height:16px"></div>
+    </div>
+
+    <div class="card activity-display" id="draw-display">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:900;color:#22c55e">🖼️ ما هذا الرسم؟</div>
+        <div id="draw-hint-v" style="color:#fbbf24;font-size:12px;font-weight:700"></div>
+        <div id="draw-timer-v" style="font-weight:900;color:#fff;font-size:13px">--</div>
+      </div>
+      <canvas id="viewer-canvas" width="800" height="500" style="width:100%;background:#fff;border-radius:10px"></canvas>
+      <div id="draw-winners-v" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
+      <div id="draw-result-v" style="text-align:center;font-weight:900;color:#a855f7;margin-top:4px"></div>
+    </div>
+
     <div class="card activity-display" id="password-display">
       <div class="card-title">🔐 كلمة السر</div>
       <div id="pw-letters-row" style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:14px 0;direction:rtl"></div>
@@ -1647,6 +1722,152 @@ function submitKoAnswer(n) {
 }
 
 init();
+
+// ══════ 🏰 حرب القلاع (غرف) ══════
+var castleMaxHP = 100;
+function castleShow(on){ document.getElementById('castle-display').classList.toggle('show', !!on); }
+function castleRender(d){
+  if (d.maxHP) castleMaxHP = d.maxHP;
+  if (typeof d.redHP === 'number'){ document.getElementById('c-red-hp').textContent = d.redHP; document.getElementById('c-red-fill').style.width = Math.max(0, d.redHP/castleMaxHP*100) + '%'; }
+  if (typeof d.blueHP === 'number'){ document.getElementById('c-blue-hp').textContent = d.blueHP; document.getElementById('c-blue-fill').style.width = Math.max(0, d.blueHP/castleMaxHP*100) + '%'; }
+  if (typeof d.redCount === 'number') document.getElementById('c-red-count').textContent = d.redCount;
+  if (typeof d.blueCount === 'number') document.getElementById('c-blue-count').textContent = d.blueCount;
+  if (typeof d.redAttacks === 'number') document.getElementById('c-red-atk').textContent = d.redAttacks;
+  if (typeof d.blueAttacks === 'number') document.getElementById('c-blue-atk').textContent = d.blueAttacks;
+}
+socket.on('room:castle', function(d){
+  if (d.phase === 'idle'){ castleShow(false); return; }
+  castleShow(true);
+  var ph = document.getElementById('castle-phase');
+  if (d.phase === 'register') ph.textContent = '📝 اكتب 1 للأحمر أو 2 للأزرق في الشات';
+  else if (d.phase === 'locked') ph.textContent = '🔒 التسجيل مقفل — ' + (d.total||0) + ' لاعب';
+  else if (d.phase === 'battle') ph.textContent = '⚔️ المعركة! كل رسالة في الشات = هجوم';
+  castleRender(d);
+});
+socket.on('room:castle-joined', function(d){ castleShow(true); castleRender(d); });
+socket.on('room:castle-attack', function(d){
+  castleRender(d);
+  var f = document.getElementById('castle-feed');
+  f.textContent = (d.team === 'red' ? '🔴 ' : '🔵 ') + d.attacker + ' ⚔️';
+});
+socket.on('room:castle-finish', function(d){
+  castleRender(d);
+  document.getElementById('castle-phase').textContent = '🏆 ' + (d.winner === 'red' ? '🔴 الأحمر' : '🔵 الأزرق') + ' فاز!';
+});
+
+// ══════ 🖼️ ما هذا الرسم (غرف) ══════
+var vCanvas = document.getElementById('viewer-canvas');
+var vCtx = vCanvas.getContext('2d');
+vCtx.lineCap = 'round'; vCtx.lineJoin = 'round';
+vCtx.fillStyle = '#fff'; vCtx.fillRect(0,0,vCanvas.width,vCanvas.height);
+var drawTimerInt = null;
+function drawShow(on){ document.getElementById('draw-display').classList.toggle('show', !!on); }
+function drawResetCanvas(c){ c.fillStyle='#fff'; c.fillRect(0,0,800,500); c.beginPath(); }
+socket.on('room:draw-start', function(d){
+  drawShow(true);
+  drawResetCanvas(vCtx);
+  document.getElementById('draw-hint-v').textContent = d.hint ? '💡 ' + d.hint : '';
+  document.getElementById('draw-winners-v').innerHTML = '';
+  document.getElementById('draw-result-v').textContent = '';
+  if (drawTimerInt) clearInterval(drawTimerInt);
+  var end = Date.now() + (d.answerTime||60)*1000;
+  drawTimerInt = setInterval(function(){
+    var rem = Math.max(0, Math.ceil((end - Date.now())/1000));
+    document.getElementById('draw-timer-v').textContent = rem + 's';
+    if (rem <= 0){ clearInterval(drawTimerInt); drawTimerInt = null; }
+  }, 250);
+});
+socket.on('room:draw-stroke', function(d){
+  vCtx.strokeStyle = d.color || '#000'; vCtx.lineWidth = d.size || 4;
+  if (d.new){ vCtx.beginPath(); vCtx.moveTo(d.x, d.y); } else { vCtx.lineTo(d.x, d.y); vCtx.stroke(); }
+});
+socket.on('room:draw-clear', function(){ drawResetCanvas(vCtx); });
+socket.on('room:draw-correct', function(d){
+  var RK = ['🥇','🥈','🥉'];
+  var el = document.getElementById('draw-winners-v');
+  var s = document.createElement('span');
+  s.style.cssText = 'padding:2px 8px;background:rgba(29,186,114,.15);border-radius:6px;font-size:11px;font-weight:700;color:#1dba72';
+  s.textContent = (RK[d.rank-1]||d.rank) + ' ' + d.player;
+  el.appendChild(s);
+});
+socket.on('room:draw-end', function(d){
+  if (drawTimerInt){ clearInterval(drawTimerInt); drawTimerInt = null; }
+  document.getElementById('draw-timer-v').textContent = '⏹';
+  document.getElementById('draw-result-v').textContent = '✅ الكلمة: ' + (d.word || '?');
+});
+
+// ── رسم المضيف على host-canvas ──
+function drawStartRoom(){
+  var w = document.getElementById('draw-word').value.trim();
+  if (!w){ alert('اكتب الكلمة السرية'); return; }
+  drawClearRoom();
+  socket.emit('room:draw-start', { code: ROOM_CODE, word: w, hint: document.getElementById('draw-hint').value.trim(), answerTime: parseInt(document.getElementById('draw-time').value)||90 });
+}
+function drawClearRoom(){
+  var hc = document.getElementById('host-canvas');
+  if (hc){ var c = hc.getContext('2d'); drawResetCanvas(c); }
+  drawResetCanvas(vCtx);
+  socket.emit('room:draw-clear', { code: ROOM_CODE });
+}
+(function(){
+  var hc = document.getElementById('host-canvas');
+  if (!hc) return;
+  var c = hc.getContext('2d');
+  c.lineCap='round'; c.lineJoin='round'; c.fillStyle='#fff'; c.fillRect(0,0,800,500);
+  var drawing = false;
+  function pos(e){
+    var r = hc.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) * (800 / r.width), y: (t.clientY - r.top) * (500 / r.height) };
+  }
+  function strokeTo(p, isNew){
+    var col = document.getElementById('draw-color').value, sz = parseInt(document.getElementById('draw-size').value)||5;
+    c.strokeStyle = col; c.lineWidth = sz;
+    if (isNew){ c.beginPath(); c.moveTo(p.x, p.y); } else { c.lineTo(p.x, p.y); c.stroke(); }
+    socket.emit('room:draw-stroke', { code: ROOM_CODE, x: p.x, y: p.y, color: col, size: sz, new: isNew });
+  }
+  function start(e){ drawing = true; strokeTo(pos(e), true); e.preventDefault(); }
+  function move(e){ if (drawing){ strokeTo(pos(e), false); e.preventDefault(); } }
+  function end(){ drawing = false; }
+  hc.addEventListener('mousedown', start); hc.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+  hc.addEventListener('touchstart', start, {passive:false}); hc.addEventListener('touchmove', move, {passive:false}); hc.addEventListener('touchend', end);
+})();
+
+// ══════ 📺 وضع الشاشة الذكية ══════
+// افتح: room.html?code=XXXX&display=1 → عرض فقط بدون تفاعل، مكبّر للتلفزيونات
+(function(){
+  var p = new URLSearchParams(location.search);
+  if (p.get('display') !== '1') return;
+  var code = (p.get('code')||'').toUpperCase();
+  if (!code) return;
+  document.body.classList.add('display-mode');
+  // انضمام كشاشة عرض عند جاهزية socket
+  var t = setInterval(function(){
+    if (typeof socket === 'undefined' || !socket.connected){ return; }
+    clearInterval(t);
+    ROOM_CODE = code;
+    socket.emit('room:display', { code: code });
+  }, 150);
+  socket.on('room:joined', function(data){
+    if (!data.display) return;
+    document.getElementById('join-modal') && (document.getElementById('join-modal').style.display = 'none');
+    document.getElementById('room-view') && (document.getElementById('room-view').style.display = '');
+    // عرض الحالات النشطة
+    if (data.castle){ castleShow(true); castleRender(data.castle);
+      var ph = document.getElementById('castle-phase');
+      if (data.castle.phase==='register') ph.textContent='📝 اكتب 1 للأحمر أو 2 للأزرق في الشات';
+      else if (data.castle.phase==='battle') ph.textContent='⚔️ المعركة! كل رسالة = هجوم'; }
+    if (data.draw){ drawShow(true); document.getElementById('draw-hint-v').textContent = data.draw.hint ? '💡 '+data.draw.hint : ''; }
+  });
+})();
+
+
+function openDisplayScreen(){
+  var link = location.origin + '/room.html?code=' + ROOM_CODE + '&display=1';
+  navigator.clipboard && navigator.clipboard.writeText(link).catch(function(){});
+  window.open(link, '_blank');
+  alert('📺 رابط شاشة العرض نُسخ — افتحه على التلفزيون أو أي شاشة:\n' + link);
+}
 </script>
 </body>
 </html>

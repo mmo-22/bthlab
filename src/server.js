@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.9.10';
+const VERSION = '2.11.0';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -790,6 +790,42 @@ async function connectRoom(username, sessionid = null) {
 
     // Quiz check — answer by number (1, 2, 3, 4)
     const quiz = getQuiz(key);
+    // ── 🏰 حرب القلاع: تسجيل (1/2) وهجمات ──
+    const castle = castleGames[key];
+    if (castle && data.comment && usr.userId) {
+      const cmt = data.comment.trim();
+      if (castle.phase === 'register') {
+        if ((cmt === '1' || cmt === '2') && !castle.redTeam.has(usr.userId) && !castle.blueTeam.has(usr.userId)) {
+          const team = cmt === '1' ? 'red' : 'blue';
+          (team === 'red' ? castle.redTeam : castle.blueTeam).set(usr.userId, { name: usr.nickname, avatar: usr.avatar });
+          broadcast(key, 'castle:joined', { team, player: usr.nickname, avatar: usr.avatar, redCount: castle.redTeam.size, blueCount: castle.blueTeam.size });
+        }
+      } else if (castle.phase === 'battle') {
+        const inRed = castle.redTeam.has(usr.userId);
+        const inBlue = castle.blueTeam.has(usr.userId);
+        if (inRed || inBlue) {
+          const team = inRed ? 'red' : 'blue';
+          if (team === 'red') { castle.blueHP = Math.max(0, castle.blueHP - 1); castle.redAttacks++; }
+          else { castle.redHP = Math.max(0, castle.redHP - 1); castle.blueAttacks++; }
+          broadcast(key, 'castle:attack', { team, attacker: usr.nickname, redHP: castle.redHP, blueHP: castle.blueHP, redAttacks: castle.redAttacks, blueAttacks: castle.blueAttacks, maxHP: castle.maxHP });
+          if (castle.redHP <= 0 || castle.blueHP <= 0) {
+            castle.phase = 'done';
+            broadcast(key, 'castle:finish', { winner: castle.redHP <= 0 ? 'blue' : 'red', redAttacks: castle.redAttacks, blueAttacks: castle.blueAttacks });
+          }
+        }
+      }
+    }
+
+    // ── 🖼️ ما هذا الرسم: تخمين الكلمة ──
+    const dg = drawGames[key];
+    if (dg && dg.active && data.comment && usr.userId && !dg.answeredIds.has(usr.userId)) {
+      if (normalizeAr(data.comment.trim()) === dg.wordNorm && dg.wordNorm) {
+        dg.answeredIds.add(usr.userId);
+        dg.winners.push({ userId: usr.userId, name: usr.nickname });
+        broadcast(key, 'draw:correct', { player: usr.nickname, rank: dg.winners.length, total: dg.winners.length });
+      }
+    }
+
     if (quiz.active && data.comment && usr.userId) {
       const num = parseInt(data.comment.trim());
       if (num >= 1 && num <= quiz.choices.length && !quiz.answers.has(usr.userId)) {
@@ -1281,6 +1317,112 @@ app.get('/api/knockout/:username', (req, res) => {
 // ══════════════════════════════════════════════════════════
 // ── Guess Game (خمن الكلمة) ──────────────────────────────
 // ══════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════
+// ── 🏰 حرب القلاع (Castle War) ───────────────────────────
+// ══════════════════════════════════════════════════════════
+const castleGames = {};
+function getCastle(key) {
+  if (!castleGames[key]) castleGames[key] = {
+    phase: 'idle', maxHP: 100, redHP: 100, blueHP: 100,
+    redTeam: new Map(), blueTeam: new Map(),
+    redAttacks: 0, blueAttacks: 0,
+  };
+  return castleGames[key];
+}
+
+app.post('/api/castle/register', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  const c = getCastle(key);
+  c.phase = 'register';
+  c.maxHP = Math.max(20, Math.min(500, parseInt(req.body.maxHP) || 100));
+  c.redHP = c.maxHP; c.blueHP = c.maxHP;
+  c.redTeam.clear(); c.blueTeam.clear();
+  c.redAttacks = 0; c.blueAttacks = 0;
+  broadcast(key, 'castle:register', { maxHP: c.maxHP });
+  res.json({ ok: true });
+});
+
+app.post('/api/castle/lock', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  const c = getCastle(key);
+  c.phase = 'locked';
+  broadcast(key, 'castle:locked', { total: c.redTeam.size + c.blueTeam.size });
+  res.json({ ok: true });
+});
+
+app.post('/api/castle/battle', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  const c = getCastle(key);
+  c.phase = 'battle';
+  broadcast(key, 'castle:battle', { maxHP: c.maxHP });
+  res.json({ ok: true });
+});
+
+app.post('/api/castle/stop', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  const c = getCastle(key);
+  c.phase = 'idle';
+  broadcast(key, 'castle:stopped', {});
+  res.json({ ok: true });
+});
+
+app.get('/api/castle/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const c = getCastle(key);
+  res.json({ phase: c.phase, maxHP: c.maxHP, redHP: c.redHP, blueHP: c.blueHP,
+    redCount: c.redTeam.size, blueCount: c.blueTeam.size,
+    redAttacks: c.redAttacks, blueAttacks: c.blueAttacks });
+});
+
+// ══════════════════════════════════════════════════════════
+// ── 🖼️ ما هذا الرسم؟ (Draw & Guess) ──────────────────────
+// ══════════════════════════════════════════════════════════
+const drawGames = {};
+function getDraw(key) {
+  if (!drawGames[key]) drawGames[key] = {
+    active: false, word: '', wordNorm: '', hint: '', answerTime: 60,
+    winners: [], answeredIds: new Set(), endTimer: null,
+  };
+  return drawGames[key];
+}
+
+function endDrawRound(key) {
+  const g = getDraw(key);
+  if (!g.active) return;
+  g.active = false;
+  if (g.endTimer) { clearTimeout(g.endTimer); g.endTimer = null; }
+  broadcast(key, 'draw:end', { word: g.word, winners: g.winners.map(w => ({ name: w.name })) });
+}
+
+app.post('/api/draw/start', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  const g = getDraw(key);
+  if (g.endTimer) { clearTimeout(g.endTimer); g.endTimer = null; }
+  g.active = true;
+  g.word = (req.body.word || '').trim();
+  g.wordNorm = normalizeAr(g.word);
+  g.hint = (req.body.hint || '').trim();
+  g.answerTime = Math.max(10, Math.min(600, parseInt(req.body.answerTime) || 60));
+  g.winners = []; g.answeredIds = new Set();
+  broadcast(key, 'draw:start', { hint: g.hint, answerTime: g.answerTime });
+  g.endTimer = setTimeout(() => endDrawRound(key), g.answerTime * 1000);
+  res.json({ ok: true });
+});
+
+app.post('/api/draw/stop', requireGameAccess, (req, res) => {
+  const key = (req.body.username || '').toLowerCase().replace('@','').trim();
+  endDrawRound(key);
+  res.json({ ok: true });
+});
+
+app.get('/api/draw/:username', (req, res) => {
+  const key = req.params.username.toLowerCase().replace('@','').trim();
+  const g = getDraw(key);
+  res.json({ active: g.active, hint: g.hint, answerTime: g.answerTime,
+    winners: g.winners.map(w => ({ name: w.name })) });
+});
+
 const guessGames = {};
 function getGuessGame(key) {
   if (!guessGames[key]) guessGames[key] = {
@@ -1649,6 +1791,19 @@ io.on('connection', (socket) => {
     }
   });
   let key = null;
+  // ── 🖼️ relay رسم اللوحة: من صفحة التحكم (مالك/مشترك موثق) → الأوفرلايات ──
+  socket.on('draw:stroke', (d) => {
+    const u = String(d?.username || '').toLowerCase().replace('@','').trim();
+    if (!u) return;
+    if (!socket._isOwner && !(socket._sub && String(socket._sub.tiktokUsername).toLowerCase().trim() === u)) return;
+    socket.to(`room:${u}`).emit('draw:stroke', d);
+  });
+  socket.on('draw:clear-canvas', (d) => {
+    const u = String(d?.username || '').toLowerCase().replace('@','').trim();
+    if (!u) return;
+    if (!socket._isOwner && !(socket._sub && String(socket._sub.tiktokUsername).toLowerCase().trim() === u)) return;
+    socket.to(`room:${u}`).emit('draw:clear-canvas', {});
+  });
   socket.on('disconnect', () => {
     if (key) socket.leave(`room:${key}`);
     // 🟢 إزالة السوكت من قائمة المشتركين المتصلين
@@ -1763,6 +1918,8 @@ function createLiveRoom(hostName) {
     knockout: { phase: 'idle', keyword: 'بطولة', maxPlayers: 16, players: new Map(), round: 0, currentQuestion: null },
     password: { active: false, word: '', revealed: new Set(), winner: null },
     wordwar: { phase: 'idle', category: '', validWords: [], redKeyword: 'أحمر', blueKeyword: 'أزرق', teams: new Map(), usedWords: new Set(), redScore: 0, blueScore: 0, endTime: 0, timer: null },
+    castle: { phase: 'idle', maxHP: 100, redHP: 100, blueHP: 100, teams: new Map(), redAttacks: 0, blueAttacks: 0, lastAtk: new Map() },
+    draw: { active: false, word: '', wordNorm: '', hint: '', answerTime: 60, winners: [], timer: null },
   };
   liveRooms.set(code, room);
   return room;
@@ -1823,6 +1980,8 @@ io.on('connection', (socket) => {
       quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
       password: lroom.password.active ? { letters: maskPw(lroom.password) } : null,
       wordwar: lroom.wordwar.phase !== 'idle' ? { phase: lroom.wordwar.phase, category: lroom.wordwar.category, redKeyword: lroom.wordwar.redKeyword, blueKeyword: lroom.wordwar.blueKeyword, redScore: lroom.wordwar.redScore, blueScore: lroom.wordwar.blueScore, redCount: wwCount(lroom.wordwar, 'red'), blueCount: wwCount(lroom.wordwar, 'blue'), endTime: lroom.wordwar.endTime } : null,
+      castle: lroom.castle.phase !== 'idle' ? { phase: lroom.castle.phase, maxHP: lroom.castle.maxHP, redHP: lroom.castle.redHP, blueHP: lroom.castle.blueHP, redCount: [...lroom.castle.teams.values()].filter(t=>t==='red').length, blueCount: [...lroom.castle.teams.values()].filter(t=>t==='blue').length, redAttacks: lroom.castle.redAttacks, blueAttacks: lroom.castle.blueAttacks } : null,
+      draw: lroom.draw.active ? { hint: lroom.draw.hint, answerTime: lroom.draw.answerTime, winners: lroom.draw.winners.map(w=>({name:w.name})) } : null,
     });
     io.to(`liveroom:${lroom.code}`).emit('room:viewers', { count: lroom.viewers.size, viewers: getRoomViewerList(lroom) });
     io.to(`liveroom:${lroom.code}`).emit('room:activity', { type: 'join', name: viewerName });
@@ -1838,6 +1997,81 @@ io.on('connection', (socket) => {
     socket.emit('room:host-ok', { code: lroom.code, viewerCount: lroom.viewers.size });
   });
 
+
+  // ── 🏰 حرب القلاع (غرف) — تحكم المضيف ──
+  socket.on('room:castle-register', ({ code, maxHP }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    const c = lroom.castle;
+    c.phase = 'register'; c.maxHP = Math.max(20, Math.min(500, parseInt(maxHP) || 100));
+    c.redHP = c.maxHP; c.blueHP = c.maxHP; c.teams.clear(); c.redAttacks = 0; c.blueAttacks = 0; c.lastAtk.clear();
+    io.to(`liveroom:${lroom.code}`).emit('room:castle', { phase: 'register', maxHP: c.maxHP, redHP: c.redHP, blueHP: c.blueHP, redCount: 0, blueCount: 0, redAttacks: 0, blueAttacks: 0 });
+  });
+  socket.on('room:castle-lock', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    lroom.castle.phase = 'locked';
+    io.to(`liveroom:${lroom.code}`).emit('room:castle', { phase: 'locked', total: lroom.castle.teams.size });
+  });
+  socket.on('room:castle-battle', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    const c = lroom.castle; c.phase = 'battle';
+    io.to(`liveroom:${lroom.code}`).emit('room:castle', { phase: 'battle', maxHP: c.maxHP, redHP: c.redHP, blueHP: c.blueHP });
+  });
+  socket.on('room:castle-stop', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    lroom.castle.phase = 'idle';
+    io.to(`liveroom:${lroom.code}`).emit('room:castle', { phase: 'idle' });
+  });
+
+  // ── 🖼️ ما هذا الرسم (غرف) — تحكم المضيف + relay الرسم ──
+  function endRoomDraw(lroom) {
+    const g = lroom.draw; if (!g.active) return;
+    g.active = false; if (g.timer) { clearTimeout(g.timer); g.timer = null; }
+    io.to(`liveroom:${lroom.code}`).emit('room:draw-end', { word: g.word, winners: g.winners.map(w => ({ name: w.name })) });
+  }
+  socket.on('room:draw-start', ({ code, word, hint, answerTime }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    const g = lroom.draw;
+    if (g.timer) { clearTimeout(g.timer); g.timer = null; }
+    g.active = true; g.word = (word || '').trim(); g.wordNorm = normalizeAr(g.word);
+    g.hint = (hint || '').trim(); g.answerTime = Math.max(10, Math.min(600, parseInt(answerTime) || 60));
+    g.winners = [];
+    io.to(`liveroom:${lroom.code}`).emit('room:draw-start', { hint: g.hint, answerTime: g.answerTime });
+    g.timer = setTimeout(() => endRoomDraw(lroom), g.answerTime * 1000);
+  });
+  socket.on('room:draw-stop', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    endRoomDraw(lroom);
+  });
+  socket.on('room:draw-stroke', (d) => {
+    const lroom = liveRooms.get((d?.code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    socket.to(`liveroom:${lroom.code}`).emit('room:draw-stroke', { x: d.x, y: d.y, color: d.color, size: d.size, new: d.new });
+  });
+  socket.on('room:draw-clear', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase()); if (!lroom || !socket._isHost) return;
+    socket.to(`liveroom:${lroom.code}`).emit('room:draw-clear', {});
+  });
+
+  // ── 📺 شاشة العرض الذكية: تنضم بالكود فقط (قراءة، لا تُحسب مشاهد) ──
+  socket.on('room:display', ({ code }) => {
+    const lroom = liveRooms.get((code || '').toUpperCase());
+    if (!lroom) return socket.emit('room:error', { message: 'الغرفة غير موجودة أو انتهت' });
+    socket.rooms.forEach(r => { if (r.startsWith('liveroom:')) socket.leave(r); });
+    socket.join(`liveroom:${lroom.code}`);
+    socket._liveRoomCode = lroom.code;
+    socket._isDisplay = true;
+    socket.emit('room:joined', {
+      code: lroom.code, hostName: lroom.hostName, viewerCount: lroom.viewers.size, display: true,
+      chatHistory: lroom.chat.slice(-30),
+      poll: lroom.poll.active ? { question: lroom.poll.question, options: lroom.poll.options, endTime: lroom.poll.endTime } : null,
+      wheel: { accepting: lroom.wheel.accepting, keyword: lroom.wheel.keyword, count: lroom.wheel.entries.size },
+      quiz: lroom.quiz.active ? { question: lroom.quiz.question, choices: lroom.quiz.choices, endTime: lroom.quiz.endTime } : null,
+      password: lroom.password.active ? { letters: maskPw(lroom.password) } : null,
+      wordwar: lroom.wordwar.phase !== 'idle' ? { phase: lroom.wordwar.phase, category: lroom.wordwar.category, redKeyword: lroom.wordwar.redKeyword, blueKeyword: lroom.wordwar.blueKeyword, redScore: lroom.wordwar.redScore, blueScore: lroom.wordwar.blueScore, redCount: wwCount(lroom.wordwar, 'red'), blueCount: wwCount(lroom.wordwar, 'blue'), endTime: lroom.wordwar.endTime } : null,
+      castle: lroom.castle.phase !== 'idle' ? { phase: lroom.castle.phase, maxHP: lroom.castle.maxHP, redHP: lroom.castle.redHP, blueHP: lroom.castle.blueHP, redCount: [...lroom.castle.teams.values()].filter(t=>t==='red').length, blueCount: [...lroom.castle.teams.values()].filter(t=>t==='blue').length, redAttacks: lroom.castle.redAttacks, blueAttacks: lroom.castle.blueAttacks } : null,
+      draw: lroom.draw.active ? { hint: lroom.draw.hint, answerTime: lroom.draw.answerTime, winners: lroom.draw.winners.map(w=>({name:w.name})) } : null,
+    });
+  });
+
   socket.on('room:chat', ({ code, message }) => {
     const lroom = liveRooms.get((code || '').toUpperCase());
     if (!lroom || !message || !message.trim()) return;
@@ -1846,6 +2080,39 @@ io.on('connection', (socket) => {
     lroom.chat.push(msg);
     if (lroom.chat.length > 100) lroom.chat.shift();
     io.to(`liveroom:${lroom.code}`).emit('room:chat', msg);
+    // Castle: تسجيل (1/2) وهجمات
+    const cs = lroom.castle;
+    if (cs.phase === 'register' && !socket._isHost) {
+      const t = msg.message.trim();
+      if ((t === '1' || t === '2') && !cs.teams.has(socket.id)) {
+        const team = t === '1' ? 'red' : 'blue';
+        cs.teams.set(socket.id, team);
+        const redCount = [...cs.teams.values()].filter(x=>x==='red').length;
+        const blueCount = cs.teams.size - redCount;
+        io.to(`liveroom:${lroom.code}`).emit('room:castle-joined', { team, player: name, redCount, blueCount });
+      }
+    } else if (cs.phase === 'battle' && cs.teams.has(socket.id)) {
+      const now = Date.now();
+      if (!cs.lastAtk.get(socket.id) || now - cs.lastAtk.get(socket.id) >= 250) {
+        cs.lastAtk.set(socket.id, now);
+        const team = cs.teams.get(socket.id);
+        if (team === 'red') { cs.blueHP = Math.max(0, cs.blueHP - 1); cs.redAttacks++; }
+        else { cs.redHP = Math.max(0, cs.redHP - 1); cs.blueAttacks++; }
+        io.to(`liveroom:${lroom.code}`).emit('room:castle-attack', { team, attacker: name, redHP: cs.redHP, blueHP: cs.blueHP, redAttacks: cs.redAttacks, blueAttacks: cs.blueAttacks, maxHP: cs.maxHP });
+        if (cs.redHP <= 0 || cs.blueHP <= 0) {
+          cs.phase = 'done';
+          io.to(`liveroom:${lroom.code}`).emit('room:castle-finish', { winner: cs.redHP <= 0 ? 'blue' : 'red', redAttacks: cs.redAttacks, blueAttacks: cs.blueAttacks });
+        }
+      }
+    }
+    // Draw: تخمين الكلمة
+    const dg2 = lroom.draw;
+    if (dg2.active && dg2.wordNorm && !socket._isHost && !dg2.winners.find(w => w.socketId === socket.id)) {
+      if (normalizeAr(msg.message.trim()) === dg2.wordNorm) {
+        dg2.winners.push({ socketId: socket.id, name });
+        io.to(`liveroom:${lroom.code}`).emit('room:draw-correct', { player: name, rank: dg2.winners.length, total: dg2.winners.length });
+      }
+    }
     // Wheel keyword check
     const w = lroom.wheel;
     if (w.accepting && w.keyword && msg.message.includes(w.keyword) && !w.entries.has(socket.id)) {
