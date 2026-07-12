@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.12.2';
+const VERSION = '2.13.0';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -2218,6 +2218,12 @@ io.on('connection', (socket) => {
   });
   socket.on('room:wheel-keyword', ({ code, keyword }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.keyword=keyword||'اشتراك'; io.to(`liveroom:${lr.code}`).emit('room:wheel-keyword',{keyword:lr.wheel.keyword}); }});
   socket.on('room:wheel-open', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=true; io.to(`liveroom:${lr.code}`).emit('room:wheel-open',{keyword:lr.wheel.keyword,count:lr.wheel.entries.size}); }});
+  socket.on('room:hide-game', ({ code, game }) => {
+    const lr = liveRooms.get((code||'').toUpperCase()); if (!lr || !socket._isHost) return;
+    const ALLOWED = ['poll','quiz','guess','knockout','password','wordwar','castle','draw','wheel'];
+    if (!ALLOWED.includes(game)) return;
+    io.to(`liveroom:${lr.code}`).emit('room:hide-game', { game });
+  });
   socket.on('room:wheel-hide', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) io.to(`liveroom:${lr.code}`).emit('room:wheel-hide',{}); });
   socket.on('room:wheel-close', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.accepting=false; io.to(`liveroom:${lr.code}`).emit('room:wheel-close',{}); }});
   socket.on('room:wheel-clear', ({ code }) => { const lr = liveRooms.get((code||'').toUpperCase()); if(lr&&socket._isHost) { lr.wheel.entries.clear(); io.to(`liveroom:${lr.code}`).emit('room:wheel-update',{entries:[],count:0,fullSync:true}); }});

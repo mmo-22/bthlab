@@ -1393,6 +1393,30 @@ body.display-mode { zoom: 1.35; }
 body.display-mode .activity-display { font-size: 1.1em; }
 
 body.activities-hidden .activity-display { display: none !important; }
+
+/* 🖼️ عرض فائز الرسم */
+#draw-display { position: relative; }
+.draw-banner {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%) scale(.6);
+  background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff;
+  padding: 14px 28px; border-radius: 16px; font-size: 20px; font-weight: 900;
+  box-shadow: 0 10px 40px rgba(34,197,94,.45); z-index: 5; opacity: 0;
+  animation: drawBanner 2.6s ease forwards; pointer-events: none; white-space: nowrap;
+}
+@keyframes drawBanner {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(.6); }
+  15% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); }
+  25% { transform: translate(-50%,-50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-60%) scale(.95); }
+}
+.draw-podium { margin-top: 8px; background: rgba(168,85,247,.06); border: 1.5px solid rgba(168,85,247,.25); border-radius: 14px; padding: 12px; }
+.draw-podium .pw-word { text-align: center; font-size: 18px; font-weight: 900; color: #a855f7; margin-bottom: 8px; }
+.draw-podium .pw-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; margin-bottom: 4px; font-weight: 700; font-size: 13px; }
+.draw-podium .pw-row.r1 { background: linear-gradient(90deg, rgba(251,191,36,.18), transparent); border-right: 3px solid #fbbf24; font-size: 15px; }
+.draw-podium .pw-row.r2 { background: linear-gradient(90deg, rgba(203,213,225,.12), transparent); border-right: 3px solid #cbd5e1; }
+.draw-podium .pw-row.r3 { background: linear-gradient(90deg, rgba(217,119,6,.12), transparent); border-right: 3px solid #d97706; }
+.draw-podium .pw-empty { text-align: center; color: rgba(255,255,255,.4); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -1456,6 +1480,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Poll ctrl -->
       <div class="ctrl-panel active" id="ctrl-poll">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('poll')">🙈 إخفاء هذه الفعالية</button></div>
         <input class="ctrl" id="poll-q" placeholder="السؤال..." maxlength="100">
         <input class="ctrl" id="poll-o1" placeholder="الخيار 1">
         <input class="ctrl" id="poll-o2" placeholder="الخيار 2">
@@ -1473,6 +1498,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Wheel ctrl -->
       <div class="ctrl-panel" id="ctrl-wheel">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('wheel')">🙈 إخفاء هذه الفعالية</button></div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <span class="label-sm" style="margin:0">الكلمة المفتاحية:</span>
           <input class="ctrl" id="wheel-keyword" value="اشتراك" style="margin:0;flex:1">
@@ -1489,8 +1515,10 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Quiz ctrl -->
       <div class="ctrl-panel" id="ctrl-quiz">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('quiz')">🙈 إخفاء هذه الفعالية</button></div>
         <div class="btn-row" style="margin-bottom:6px">
           <button class="btn-sm btn-primary" onclick="quizFromBank()">🎲 سؤال من البنك</button>
+          <label class="label-sm" style="margin:0;display:flex;align-items:center;gap:4px;color:#fbbf24"><input type="checkbox" id="quiz-auto-mode"> 🔁 انتقال تلقائي</label>
         </div>
         <input class="ctrl" id="quiz-q" placeholder="السؤال..." maxlength="150">
         <input class="ctrl" id="quiz-c1" placeholder="الخيار 1">
@@ -1513,6 +1541,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Viewers ctrl -->
       <div class="ctrl-panel" id="ctrl-castle">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('castle')">🙈 إخفاء هذه الفعالية</button></div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <span class="label-sm" style="margin:0">صحة القلعة:</span>
           <input class="ctrl" id="castle-hp" type="number" value="100" min="20" max="500" style="width:90px;margin:0">
@@ -1527,6 +1556,7 @@ body.activities-hidden .activity-display { display: none !important; }
       </div>
 
       <div class="ctrl-panel" id="ctrl-draw">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('draw')">🙈 إخفاء هذه الفعالية</button></div>
         <div class="btn-row" style="margin-bottom:6px">
           <button class="btn-sm btn-primary" onclick="drawFromBank()">🎲 كلمة عشوائية</button>
         </div>
@@ -1556,6 +1586,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Guess ctrl -->
       <div class="ctrl-panel" id="ctrl-guess">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('guess')">🙈 إخفاء هذه الفعالية</button></div>
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <select id="guess-cat" style="background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:'Tajawal',sans-serif;outline:none;margin:0"></select>
           <button class="btn-sm btn-primary" onclick="guessFromBank()" style="margin:0">🎲 عشوائي</button>
@@ -1573,6 +1604,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Knockout ctrl -->
       <div class="ctrl-panel" id="ctrl-knockout">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('knockout')">🙈 إخفاء هذه الفعالية</button></div>
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <input class="ctrl" id="ko-keyword" value="بطولة" placeholder="كلمة التسجيل" style="margin:0;flex:1">
           <input class="ctrl" id="ko-max" type="number" value="16" min="4" max="64" style="margin:0;width:70px">
@@ -1585,6 +1617,7 @@ body.activities-hidden .activity-display { display: none !important; }
         <div class="btn-row" style="margin-bottom:6px">
           <button class="btn-sm btn-primary" onclick="koFromBank()">🎲 سؤال من البنك (<span id="ko-bank-count">222</span>)</button>
           <label class="label-sm" style="margin:0;display:flex;align-items:center;gap:4px"><input type="checkbox" id="ko-auto-send"> إرسال مباشرة</label>
+          <label class="label-sm" style="margin:0;display:flex;align-items:center;gap:4px;color:#fbbf24"><input type="checkbox" id="ko-auto-mode" onchange="koAutoChanged()"> 🔁 انتقال تلقائي</label>
         </div>
         <input class="ctrl" id="ko-q" placeholder="اكتب السؤال...">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
@@ -1603,6 +1636,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Password ctrl -->
       <div class="ctrl-panel" id="ctrl-password">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('password')">🙈 إخفاء هذه الفعالية</button></div>
         <div class="btn-row" style="margin-bottom:6px">
           <button class="btn-sm btn-primary" onclick="pwFromBank()">🎲 كلمة عشوائية</button>
         </div>
@@ -1617,6 +1651,7 @@ body.activities-hidden .activity-display { display: none !important; }
 
       <!-- Word War ctrl -->
       <div class="ctrl-panel" id="ctrl-wordwar">
+        <div style="display:flex;justify-content:flex-start;margin-bottom:6px"><button class="btn-sm" style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);color:#fca5a5" onclick="hideGame('wordwar')">🙈 إخفاء هذه الفعالية</button></div>
         <div style="display:flex;gap:6px;margin-bottom:8px">
           <select id="ww-cat-select" style="flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:'Tajawal',sans-serif;outline:none"></select>
           <button class="btn-sm btn-primary" onclick="wwUseCat()" style="margin:0">📦 استخدم الفئة</button>
@@ -2742,6 +2777,33 @@ function bthBindExtras(){
   socket._bthExtras = true;
 
   socket.on('room:wheel-hide', function(){ var e=document.getElementById('wheel-display'); if(e) e.classList.remove('show'); });
+  socket.on('room:hide-game', function(d){
+    var el = document.getElementById(d.game + '-display');
+    if (el) el.classList.remove('show');
+  });
+  // 🔁 خروج: بعد الكشف → سؤال جديد من البنك تلقائياً (إن لم يوجد فائز)
+  socket.on('room:knockout-reveal', function(d){
+    if (!IS_HOST || window.DISPLAY_MODE) return;
+    var cb = document.getElementById('ko-auto-mode');
+    if (!cb || !cb.checked) return;
+    if (d.winner || d.aliveCount <= 1) return; // انتهت البطولة
+    if (koAutoNextT) clearTimeout(koAutoNextT);
+    koAutoNextT = setTimeout(function(){
+      koAutoNextT = null;
+      if (document.getElementById('ko-auto-mode').checked){ koFromBank(); askKnockout(); }
+    }, 6000);
+  });
+  // 🔁 سؤال وجواب: بعد النهاية → سؤال جديد تلقائياً
+  socket.on('room:quiz-end', function(){
+    if (!IS_HOST || window.DISPLAY_MODE) return;
+    var cb = document.getElementById('quiz-auto-mode');
+    if (!cb || !cb.checked) return;
+    if (quizAutoT) clearTimeout(quizAutoT);
+    quizAutoT = setTimeout(function(){
+      quizAutoT = null;
+      if (document.getElementById('quiz-auto-mode').checked){ quizFromBank(); startQuiz(); }
+    }, 6000);
+  });
   socket.on('room:castle', function(d){
     if (d.phase === 'idle'){ castleShow(false); return; }
     castleShow(true);
@@ -2783,16 +2845,34 @@ function bthBindExtras(){
   socket.on('room:draw-clear', function(){ drawResetCanvas(vCtx); });
   socket.on('room:draw-correct', function(d){
     var RK = ['🥇','🥈','🥉'];
+    var badge = RK[d.rank-1] || ('#' + d.rank);
+    // شريحة صغيرة في الشريط
     var el = document.getElementById('draw-winners-v');
     var s = document.createElement('span');
     s.style.cssText = 'padding:2px 8px;background:rgba(29,186,114,.15);border-radius:6px;font-size:11px;font-weight:700;color:#1dba72';
-    s.textContent = (RK[d.rank-1]||d.rank) + ' ' + d.player;
+    s.textContent = badge + ' ' + d.player;
     el.appendChild(s);
+    // 🎉 بانر احتفالي فوق اللوحة
+    var dd = document.getElementById('draw-display');
+    var b = document.createElement('div');
+    b.className = 'draw-banner';
+    b.textContent = '🎉 ' + badge + ' ' + d.player + ' خمّنها!';
+    dd.appendChild(b);
+    setTimeout(function(){ b.remove(); }, 2700);
   });
   socket.on('room:draw-end', function(d){
     if (drawTimerInt){ clearInterval(drawTimerInt); drawTimerInt = null; }
     document.getElementById('draw-timer-v').textContent = '⏹';
-    document.getElementById('draw-result-v').textContent = '✅ الكلمة: ' + (d.word || '?');
+    // 🏆 منصة التتويج
+    var RK = ['🥇','🥈','🥉'];
+    var winners = d.winners || [];
+    var rows = winners.length
+      ? winners.slice(0, 8).map(function(w, i){
+          return '<div class="pw-row r' + (i+1) + '">' + (RK[i] || '#' + (i+1)) + ' ' + w.name + '</div>';
+        }).join('')
+      : '<div class="pw-empty">😅 ما أحد خمّنها هالمرة</div>';
+    document.getElementById('draw-result-v').innerHTML =
+      '<div class="draw-podium"><div class="pw-word">✅ الكلمة: ' + (d.word || '?') + '</div>' + rows + '</div>';
   });
 
   // الإخفاء: يطبق على المشاهدين وشاشة العرض (المضيف مستثنى)
@@ -2884,6 +2964,40 @@ function openDisplayScreen(){
   // الاتصال كشاشة عرض — نفس مسار المشاهد (كل معالجات الألعاب) لكن ينضم كـ display
   connectSocket(false);
 })();
+
+
+// ═══ 🙈 إخفاء فعالية محددة ═══
+function hideGame(g){
+  if (!socket) return;
+  socket.emit('room:hide-game', { code: ROOM_CODE, game: g });
+}
+
+// ═══ 🔁 الانتقال التلقائي (خروج + سؤال) ═══
+var koAutoRevealT = null, koAutoNextT = null, quizAutoT = null;
+function koAutoChanged(){
+  if (!document.getElementById('ko-auto-mode').checked){
+    if (koAutoRevealT){ clearTimeout(koAutoRevealT); koAutoRevealT = null; }
+    if (koAutoNextT){ clearTimeout(koAutoNextT); koAutoNextT = null; }
+  }
+}
+// نلف askKnockout: بعد الإرسال بوضع التلقائي، نجدول الكشف بعد انتهاء الوقت
+var _origAskKnockout = null;
+document.addEventListener('DOMContentLoaded', function(){
+  if (typeof askKnockout === 'function' && !_origAskKnockout){
+    _origAskKnockout = askKnockout;
+    askKnockout = function(){
+      _origAskKnockout();
+      if (document.getElementById('ko-auto-mode') && document.getElementById('ko-auto-mode').checked){
+        var t = (parseInt(document.getElementById('ko-time').value) || 15) + 1;
+        if (koAutoRevealT) clearTimeout(koAutoRevealT);
+        koAutoRevealT = setTimeout(function(){
+          koAutoRevealT = null;
+          if (document.getElementById('ko-auto-mode').checked) socket.emit('room:knockout-reveal', { code: ROOM_CODE });
+        }, t * 1000);
+      }
+    };
+  }
+});
 
 </script>
 </body>
