@@ -1386,11 +1386,9 @@ window.BANK_CATS=[
   .label-sm { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; display: block; }
 
 /* 📺 وضع الشاشة الذكية */
-body.display-mode .chat-input-row, body.display-mode #chat-input, body.display-mode .send-btn,
-body.display-mode .poll-option, body.display-mode button:not(.tab-mini) { pointer-events: none; }
-body.display-mode .header-left button, body.display-mode #chat-form { display: none !important; }
-body.display-mode { zoom: 1.35; }
-body.display-mode .activity-display { font-size: 1.1em; }
+/* 📺 وضع الشاشة الذكية: حجم طبيعي، إخفاء إدخال الشات فقط */
+body.display-mode #chat-form, body.display-mode .chat-input-row { display: none !important; }
+body.display-mode .activity-display { font-size: 1.08em; }
 
 body.activities-hidden .activity-display { display: none !important; }
 
@@ -2955,11 +2953,17 @@ function openDisplayScreen(){
   var joinLink = location.origin + '/room.html?code=' + code;
   var qr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=' + encodeURIComponent(joinLink);
   var bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;top:14px;left:14px;z-index:9999;background:rgba(13,13,20,.92);border:1.5px solid rgba(168,85,247,.4);border-radius:16px;padding:12px 16px;display:flex;align-items:center;gap:14px';
-  bar.innerHTML = '<img src="'+qr+'" style="width:110px;height:110px;border-radius:10px;background:#fff;padding:4px" alt="QR">' +
-    '<div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px">امسح للانضمام أو ادخل الكود:</div>' +
-    '<div style="font-size:30px;font-weight:900;color:#a855f7;letter-spacing:3px;font-family:monospace">'+code+'</div>' +
-    '<div style="font-size:11px;color:rgba(255,255,255,.35);direction:ltr;text-align:left">'+location.host+'/room.html</div></div>';
+  bar.style.cssText = 'position:fixed;top:12px;left:12px;z-index:9999;background:rgba(13,13,20,.92);border:1.5px solid rgba(168,85,247,.4);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:opacity .3s';
+  bar.title = 'انقر للإخفاء/الإظهار';
+  bar.innerHTML = '<img src="'+qr+'" style="width:86px;height:86px;border-radius:8px;background:#fff;padding:3px" alt="QR">' +
+    '<div><div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:2px">امسح للانضمام أو ادخل الكود:</div>' +
+    '<div style="font-size:24px;font-weight:900;color:#a855f7;letter-spacing:2px;font-family:monospace">'+code+'</div>' +
+    '<div style="font-size:10px;color:rgba(255,255,255,.35);direction:ltr;text-align:left">'+location.host+'/room.html</div></div>';
+  var qrMin = false;
+  bar.onclick = function(){
+    qrMin = !qrMin;
+    bar.style.opacity = qrMin ? '0.15' : '1';
+  };
   document.body.appendChild(bar);
   // الاتصال كشاشة عرض — نفس مسار المشاهد (كل معالجات الألعاب) لكن ينضم كـ display
   connectSocket(false);
