@@ -1,22 +1,22 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { TikTokLive } = require('tiktok-live-api');
+const { TikTokLiveConnection, SignConfig } = require('tiktok-live-connector');
 
-// ── 🔑 مزود التوقيع: tik.tools ──
-// tik.tools يقدم signing على Free tier (Sandbox: 15 WS, 2,500 req/يوم)
-// احصل على مفتاح مجاني من: https://tik.tools/login
-// ضع في Railway env vars: TIKTOOL_API_KEY=<مفتاحك>
-const TIKTOK_API_KEY = process.env.TIKTOOL_API_KEY
+// ── 🔑 مزود التوقيع: EulerStream ──
+// Community tier مجاني للأبد: 2,500 طلب/يوم + 25 WebSocket متزامن
+// احصل على مفتاح مجاني من: https://www.eulerstream.com
+// ضع في Railway env vars: EULER_API_KEY=<مفتاحك>
+const TIKTOK_API_KEY = process.env.EULER_API_KEY
   || process.env.SIGN_API_KEY
-  || process.env.TIKTOOLS_API_KEY
   || '';
 
 if (!TIKTOK_API_KEY) {
-  console.error('⚠️  [tik.tools] مفتاح API مفقود — احصل على واحد مجاني من https://tik.tools/login');
-  console.error('   ثم أضفه في Railway env vars بالاسم: TIKTOOL_API_KEY');
+  console.error('⚠️  [EulerStream] مفتاح API مفقود — احصل على واحد مجاني من https://www.eulerstream.com');
+  console.error('   ثم أضفه في Railway env vars بالاسم: EULER_API_KEY');
 } else {
-  console.log('[tik.tools] Provider: tik.tools | Key:', TIKTOK_API_KEY.slice(0, 12) + '...');
+  SignConfig.apiKey = TIKTOK_API_KEY;
+  console.log('[EulerStream] Provider: EulerStream | Key:', TIKTOK_API_KEY.slice(0, 12) + '...');
 }
 const path = require('path');
 const crypto = require('crypto');
@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.13.1';
+const VERSION = '2.14.0';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -544,7 +544,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 const rooms = {};
 
 // ── TikTok v1/v2 data normalization ──────────────────────
-// tiktok-live-api v2.x (نفس بنية tiktok-live-connector v2) نقل حقول المستخدم داخل data.user
+// tiktok-live-connector v2.x نقل حقول المستخدم داخل data.user
 // والصورة صارت قائمة روابط في avatarThumb/profilePicture
 function pickUrl(p) {
   if (!p) return null;
@@ -607,52 +607,22 @@ async function connectRoom(username, sessionid = null) {
   io.to(`room:${key}`).emit('room:status', { username: key, status: 'connecting' });
   console.log(`[TikTok] Connecting to @${key}...`);
 
-  const opts = { apiKey: TIKTOK_API_KEY, processInitialData: false, enableExtendedGiftInfo: true };
+  const opts = { processInitialData: false, enableExtendedGiftInfo: true, signApiKey: TIKTOK_API_KEY };
   if (sessionid) opts.sessionId = sessionid;
   if (room.sessionid) opts.sessionId = room.sessionid;
-  const tiktok = new TikTokLive(key, opts);
+  const tiktok = new TikTokLiveConnection(key, opts);
   room.tiktok = tiktok;
 
   try {
-    // مكتبة tik.tools ترجع undefined من connect() - الحالة تجي عبر حدث 'connected'
-    // فنحط listener أولاً ثم نطلب الاتصال
-    let connectedState = null;
-    tiktok.on('connected', (state) => {
-      connectedState = state || {};
-      room.status = 'connected';
-      room.retryCount = 0;
-      // viewerCount قد يكون في state.viewerCount أو state.roomInfo.user_count
-      const viewers = state?.viewerCount
-        || state?.roomInfo?.user_count
-        || state?.roomInfo?.viewerCount
-        || 0;
-      room.stats.viewers = viewers;
-      console.log(`[TikTok] ✅ Connected @${key} (viewers: ${viewers})`);
-      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers });
-      broadcast(key, 'stats', room.stats);
-    });
-
-    // محاولة الاتصال — قد ترجع undefined لكن الحدث connected يطلق بنجاح
-    const ret = await tiktok.connect();
-    // لو المكتبة رجعت state بدلاً من الحدث، استخدمه
-    if (ret && !connectedState) {
-      connectedState = ret;
-      room.status = 'connected';
-      room.retryCount = 0;
-      const viewers = ret.viewerCount || ret.roomInfo?.user_count || 0;
-      room.stats.viewers = viewers;
-      console.log(`[TikTok] ✅ Connected @${key} (viewers: ${viewers}, via return)`);
-      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers });
-      broadcast(key, 'stats', room.stats);
-    }
-    // لو لا حدث connected ولا return — اعتبره ناجح بدون viewers
-    if (!connectedState) {
-      room.status = 'connected';
-      room.retryCount = 0;
-      console.log(`[TikTok] ✅ Connected @${key} (silent)`);
-      io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers: 0 });
-      broadcast(key, 'stats', room.stats);
-    }
+    // tiktok-live-connector (EulerStream) يرجع state مباشرة من connect()
+    const state = await tiktok.connect();
+    room.status = 'connected';
+    room.retryCount = 0;
+    const viewers = state?.viewerCount || state?.roomInfo?.user_count || 0;
+    room.stats.viewers = viewers;
+    console.log(`[TikTok] ✅ Connected @${key} (viewers: ${viewers})`);
+    io.to(`room:${key}`).emit('room:status', { username: key, status: 'connected', viewers });
+    broadcast(key, 'stats', room.stats);
   } catch(err) {
     const msg = err.message || String(err) || 'unknown';
     let userMsg = '';
@@ -662,7 +632,7 @@ async function connectRoom(username, sessionid = null) {
     } else if (/user.*not.*found|account.*not.*found|404/i.test(msg)) {
       userMsg = '❌ اليوزرنيم غير موجود في تيك توك — تأكد من الإملاء';
     } else if (/sign.*request|signing|signature|401|403/i.test(msg)) {
-      userMsg = '🔑 مشكلة في مفتاح tik.tools — تواصل مع الدعم';
+      userMsg = '🔑 مشكلة في مفتاح EulerStream — تواصل مع الدعم';
     } else if (/rate.*limit|429|too.*many/i.test(msg)) {
       userMsg = '⏱️ تجاوز معدل الطلبات — انتظر دقيقة وأعد المحاولة';
     } else if (/ban|forbidden|blocked/i.test(msg)) {
@@ -877,7 +847,7 @@ async function connectRoom(username, sessionid = null) {
 
   tiktok.on('member', (data) => { const usr = extractUser(data); const msg = { type:'member', user: usr.nickname, avatar: usr.avatar, actionId: data.actionId, ts: Date.now() }; if (data.actionId === 1) storeMsg(key, msg); broadcast(key, 'member', msg); });
   // ── مصنّف موحّد للأحداث الاجتماعية (share/follow) ──
-  // tik.tools أحياناً يرسل الشير بحدث خاطئ — نصنّف حسب displayType/label الفعلي
+  // المكتبة أحياناً ترسل الشير بحدث خاطئ — نصنّف حسب displayType/label الفعلي
   function handleSocial(evtName, data) {
     const usr = extractUser(data);
     const disp = String(data.displayType || data.label || '').toLowerCase();
@@ -925,27 +895,6 @@ async function connectRoom(username, sessionid = null) {
     console.log(`[TikTok] خطأ @${key}: ${msg}`);
     scheduleRetry(key, 0, msg);
   });
-}
-
-// ── 🛡️ حماية ضد الباند: فحص حالة البث + Rate Limiting ──
-// قبل أي محاولة اتصال، نتحقق من tik.tools أن المستخدم live فعلاً
-// هذا يمنع المحاولات المتكررة التي سببت الباند سابقاً
-async function checkIfLive(username) {
-  if (!TIKTOK_API_KEY) return { isLive: false, error: 'مفتاح API مفقود' };
-  try {
-    const url = `https://api.tik.tools/live/check?uniqueId=${encodeURIComponent(username)}&apiKey=${encodeURIComponent(TIKTOK_API_KEY)}`;
-    const res = await fetch(url, { method: 'GET' });
-    if (!res.ok) {
-      // 404 = user not found, 429 = rate limit
-      if (res.status === 429) return { isLive: false, error: 'تجاوز معدل الطلبات — انتظر دقيقة' };
-      return { isLive: false, error: `فشل التحقق (${res.status})` };
-    }
-    const data = await res.json();
-    return { isLive: !!(data.isLive || data.data?.isLive), data };
-  } catch (err) {
-    console.log('[liveCheck] خطأ:', err.message);
-    return { isLive: false, error: 'فشل الاتصال بـ tik.tools' };
-  }
 }
 
 // Rate limiting لكل user + للسيرفر كله (يمنع الضغط المتكرر السريع)

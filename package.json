@@ -1,6 +1,6 @@
 {
   "name": "bthlab",
-  "version": "2.13.1",
+  "version": "2.14.0",
   "description": "BthLab — مختبر البث",
   "main": "src/server.js",
   "scripts": {
@@ -10,8 +10,7 @@
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "tiktok-live-api": "^2.0.0"
+    "tiktok-live-connector": "^2.1.1-beta1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
