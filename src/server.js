@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.14.2';
+const VERSION = '2.14.3';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -607,7 +607,7 @@ async function connectRoom(username, sessionid = null) {
   io.to(`room:${key}`).emit('room:status', { username: key, status: 'connecting' });
   console.log(`[TikTok] Connecting to @${key}...`);
 
-  const opts = { apiKey: TIKTOK_API_KEY, processInitialData: false, enableExtendedGiftInfo: true };
+  const opts = { apiKey: TIKTOK_API_KEY, processInitialData: false, enableExtendedGiftInfo: true, autoReconnect: false, maxReconnectAttempts: 0 };
   if (sessionid) opts.sessionId = sessionid;
   if (room.sessionid) opts.sessionId = room.sessionid;
   const tiktok = new TikTokLive(key, opts);
