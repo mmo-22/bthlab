@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ── Version ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-const VERSION = '2.14.1';
+const VERSION = '2.14.2';
 app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 
 // ══════════════════════════════════════════════════════════
@@ -911,7 +911,10 @@ async function connectRoom(username, sessionid = null) {
     console.log(`[TikTok] @${key} انتهى البث رسمياً — توقف نظيف`);
     io.to(`room:${key}`).emit('room:status', { username: key, status: 'offline', message: '🛑 انتهى البث — اضغط "اتصال" يدوياً عند بدء بث جديد' });
   });
-  tiktok.on('disconnected', () => {
+  tiktok.on('disconnected', (info) => {
+    const code = info?.code;
+    const reason = info?.reason || '';
+    console.log(`[TikTok] 🔌 @${key} WS closed — code: ${code ?? 'n/a'}, reason: "${reason}"`);
     if (room.status === 'connected') {
       // انقطاع غير متعمد — توقف نظيف، المستخدم يضغط يدوياً
       room.status = 'offline';
@@ -921,8 +924,8 @@ async function connectRoom(username, sessionid = null) {
     }
   });
   tiktok.on('error', (err) => {
-    const msg = String(err?.message || err || '');
-    console.log(`[TikTok] خطأ @${key}: ${msg}`);
+    const msg = String(err?.error || err?.message || err || '');
+    console.log(`[TikTok] ❌ خطأ @${key}: ${msg}`);
     scheduleRetry(key, 0, msg);
   });
 }
